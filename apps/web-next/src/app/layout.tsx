@@ -11,7 +11,7 @@ import { ToastProvider } from '@/shared/components/ui/toast'
 
 export const metadata: Metadata = {
   title: 'MuseCanvas',
-  description: 'MuseCanvas creative workspace',
+  description: '面向创作者的 AI 图像生成工作台：提示词、画幅与参考图、任务队列和作品图库保持在同一条创作路径上。',
   icons: { icon: '/favicon.png' },
 }
 
@@ -31,7 +31,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>
+      {/* The canvas + foreground pair lives on `body`, not on each page: an
+          overscroll or a route without its own wrapper would otherwise flash the
+          browser default (white) under the dark theme. */}
+      <body className="bg-canvas text-foreground antialiased">
         <ToastProvider>
           <QueryProvider>{children}</QueryProvider>
         </ToastProvider>

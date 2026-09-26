@@ -24,6 +24,22 @@ import { clearReferenceImages, reconcileStagedRoles } from '@/shared/lib/referen
 import { GENERATE_ROUTE } from '@/shared/lib/app-routes'
 import { MediaFrame, stageAspectRatio } from '@/shared/components/media-frame'
 import { JobStatusBadge } from '@/shared/components/job-status-badge'
+import {
+  Alert,
+  Button,
+  Card,
+  CardTitle,
+  EmptyState,
+  IconButton,
+  PageHeader,
+  Progress,
+  Select,
+  SkeletonRow,
+  SkeletonTile,
+  Spinner,
+  buttonVariants,
+} from '@/shared/components/ui'
+import { cn } from '@/shared/lib/cn'
 import { isJobActive } from '@/shared/lib/job-status'
 import { isVideoOutput, modelMediaKind, outputUrl } from '@/shared/types'
 import type {
@@ -42,8 +58,7 @@ import {
   Clock,
   Crop,
   Download,
-  Film,
-  Loader2,
+  ImageOff,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
@@ -51,9 +66,6 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-
-const SELECT_CLASS =
-  'rounded-[var(--radius-control)] border border-border bg-surface-subtle px-2.5 py-1.5 text-xs font-medium text-foreground outline-none hover:bg-surface-subtle-strong'
 
 /** `?tab=` accepts only the two kinds; anything else (typo, stale bookmark) is image. */
 function readTabParam(value: string | null): GenerateModeTab {
@@ -112,11 +124,20 @@ export function GenerateConsole() {
   const isReferenceUploadBusy = useGenerateUiStore((s) =>
     s.stagedImages.some((image) => image.status === 'pending' || image.status === 'uploading' || image.status === 'processing'),
   )
+  const hasReferenceUploadError = useGenerateUiStore((s) =>
+    s.stagedImages.some((image) => image.status === 'error'),
+  )
 
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const { data: models, isLoading: modelsLoading } = useModelsQuery()
+  const {
+    data: models,
+    isLoading: modelsLoading,
+    isError: modelsQueryFailed,
+    error: modelsQueryError,
+    refetch: refetchModels,
+  } = useModelsQuery()
   const {
     data: jobs = [],
     isLoading: jobsLoading,
@@ -160,7 +181,6 @@ export function GenerateConsole() {
     const list = isVideoTab ? videoModels : imageModels
     return [...list].sort((left, right) => Number(left.deprecated === true) - Number(right.deprecated === true))
   }, [isVideoTab, videoModels, imageModels])
-  const videoModelMissing = !modelsLoading && isVideoTab && videoModels.length === 0
 
   const storedModelId = selectedModelIdByKind[activeTab]
   // Same id and still offered -> keep it; otherwise fall back to the first model
@@ -171,6 +191,9 @@ export function GenerateConsole() {
   const currentModel = tabModels.find((model) => model.id === activeModelId)
   const params = paramsByKind[activeTab]
   const inputPlan = useMemo(() => resolveImageInputPlan(currentModel), [currentModel])
+  const referencePlanBlocker = useGenerateUiStore((s) =>
+    s.stagedImages.length > 0 ? inputPlanViolations(s.stagedImages, inputPlan)[0] ?? null : null,
+  )
   // Computed, never stored: this runs the same validator the API runs, so an
   // enabled submit button and an acceptable request are the same claim rather
   // than two lists that can disagree.
@@ -244,7 +267,6 @@ export function GenerateConsole() {
   const selectedJobActive = selectedJob ? isJobActive(selectedJob) : false
   const stageOutputs = selectedJob?.outputs ?? []
   const stageIsVideo = selectedJob ? jobMediaKind(selectedJob) === 'video' : false
-  const showVideoEmptyState = videoModelMissing && !stageIsVideo
   // A lone 16:9 clip at `max-w-lg` is ~288px tall against a ~512px square
   // render, so a wide single output gets a wider box to carry the same weight.
   // Portrait deliberately keeps `max-w-lg`: the stage box now follows the
@@ -294,6 +316,35 @@ export function GenerateConsole() {
     return null
   }
   const editBlockedReason = editSubmitBlocker()
+
+  function generateSubmitBlocker(): string | null {
+    if (modelsLoading) return '正在加载模型，请稍候'
+    if (modelsQueryFailed && !models) return '模型列表加载失败，请重试'
+    if (!currentModel) {
+      return isVideoTab
+        ? '尚未配置可用的视频模型，请先启用视频模型'
+        : '尚未配置可用的图像模型，请联系管理员'
+    }
+    if (!prompt.trim()) return '请输入提示词后即可生成'
+    if (createJobMutation.isPending) return '正在创建任务，请稍候'
+    if (selectedJobActive) return '上一个任务仍在进行中，请等待完成'
+    if (isPreparingReferences) return `正在校验${inputNoun}，请完成后再生成`
+    if (isReferenceUploadBusy) return `${inputNoun}正在上传，请等待完成后再生成`
+    if (hasReferenceUploadError) return `存在上传失败的${inputNoun}，请重试或删除`
+    if (referencePlanBlocker) return referencePlanBlocker
+    if (parameterProblems.length > 0) {
+      const [problem] = parameterProblems
+      const descriptor = currentModel?.parameters?.find((entry) => entry.name === problem.parameter)
+      const label = descriptor ? descriptorLabel(descriptor, currentModel) : ''
+      return label ? `${label}：${problem.message}` : problem.message
+    }
+    return null
+  }
+  const submitBlockedReason = editing
+    ? editMutation.isPending
+      ? '正在提交局部修改，请稍候'
+      : editBlockedReason
+    : generateSubmitBlocker()
 
   // Escape clears the selection from anywhere in edit mode — the caret is usually in
   // the prompt textarea while the user looks at the rectangle they just drew.
@@ -420,7 +471,7 @@ export function GenerateConsole() {
       return
     }
     if (stagedImages.some((image) => image.status === 'error')) {
-      setErrorMessage(`存在上传失败的${inputNoun}，请重试或先移除`)
+      setErrorMessage(`存在上传失败的${inputNoun}，请重试或删除`)
       return
     }
     const inputs = buildGenerationInputs(stagedImages)
@@ -474,7 +525,7 @@ export function GenerateConsole() {
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
-      handleGenerate()
+      if (!submitBlockedReason) handleGenerate()
     }
   }
 
@@ -491,50 +542,101 @@ export function GenerateConsole() {
         className="relative flex min-h-0 w-full flex-1 overflow-hidden"
       >
         {/* Left: Interactive Generation Studio */}
-        <div className="flex flex-1 flex-col overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div
-            className={`mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 ${
-              selectedJob ? '' : 'justify-center'
-            }`}
-          >
+        <div className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
+          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6">
+            <PageHeader
+              title={editing ? '局部修改' : isVideoTab ? '视频生成' : '图像生成'}
+              description={
+                editing
+                  ? '在源图上框选一块区域，再用一句话描述要改什么。源图保持不变，结果作为新任务生成。'
+                  : '写下画面描述，选好模型与参数，即可生成图像或视频。'
+              }
+            />
+
             {/* Prompt & Input Box */}
-            <div className="rounded-[var(--radius-card)] bg-surface p-4 shadow-md transition-shadow focus-within:shadow-lg">
+            <Card className="gap-0 p-4">
+              <label htmlFor="generate-prompt" className="sr-only">生成提示词</label>
               <textarea
+                id="generate-prompt"
                 rows={4}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   isVideoTab
-                    ? '描述你想生成的视频内容，例如：镜头缓慢推进晨雾中的森林，晨光穿透树叶，电影感运镜...'
+                    ? '描述你想生成的视频内容，例如：镜头缓慢推进晨雾中的森林，晨光穿透树叶，电影感运镜……'
                     : editing
-                      ? '描述要修改的内容，例如：把框选区域内的人物换成一件红色风衣，其余保持不变...'
-                      : '描述你想生成的画面内容，例如：赛博朋克风格未来雨夜街道，霓虹灯倒影，8k高细节...'
+                      ? '描述要修改的内容，例如：把框选区域内的人物换成一件红色风衣，其余保持不变……'
+                      : '描述你想生成的画面内容，例如：赛博朋克风格未来雨夜街道，霓虹灯倒影，8k 高细节……'
                 }
-                className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground"
+                aria-describedby="generate-prompt-help"
+                className="w-full resize-none bg-transparent text-sm leading-[1.59] text-foreground placeholder:text-muted-foreground"
               />
+              <p id="generate-prompt-help" className="mt-1 text-xs text-muted-foreground">
+                支持 Ctrl/⌘ + Enter 快捷生成。
+              </p>
 
-              {/* Controls Bar — separated from the textarea by space now, not a rule */}
+              {/* Controls Bar — separated from the textarea by space, never a rule */}
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Model Selector */}
-                  <select
-                    value={activeModelId}
-                    onChange={(e) => setSelectedModelId(activeTab, e.target.value)}
-                    className={SELECT_CLASS}
-                  >
-                    {modelsLoading && <option>加载模型中...</option>}
-                    {tabModels.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.deprecated === true
-                          ? `${m.displayName}（已弃用${m.deprecationNote ? `：${m.deprecationNote}` : ''}）`
-                          : m.displayName}
-                      </option>
-                    ))}
-                    {!modelsLoading && isVideoTab && tabModels.length === 0 && (
-                      <option value="">尚未配置视频模型</option>
+                  <div className="flex flex-col items-start gap-1">
+                    <label htmlFor="generate-model" className="sr-only">生成模型</label>
+                    <Select
+                      size="sm"
+                      width="content"
+                      id="generate-model"
+                      value={activeModelId}
+                      onChange={(e) => setSelectedModelId(activeTab, e.target.value)}
+                      disabled={modelsLoading || tabModels.length === 0}
+                      aria-describedby={
+                        modelsLoading || modelsQueryFailed || !currentModel
+                          ? 'generate-model-help generate-model-status'
+                          : 'generate-model-help'
+                      }
+                    >
+                      {modelsLoading && <option value="">加载模型中…</option>}
+                      {tabModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.deprecated === true
+                            ? `${m.displayName}（已弃用${m.deprecationNote ? `：${m.deprecationNote}` : ''}）`
+                            : m.displayName}
+                        </option>
+                      ))}
+                      {!modelsLoading && tabModels.length === 0 && (
+                        <option value="">尚未配置{isVideoTab ? '视频' : '图像'}模型</option>
+                      )}
+                    </Select>
+                    <span id="generate-model-help" className="sr-only">
+                      选择本次生成使用的模型。模型由管理员配置。
+                    </span>
+                    {(modelsLoading || modelsQueryFailed || !currentModel) && (
+                      <p
+                        id="generate-model-status"
+                        role={modelsQueryFailed ? 'alert' : 'status'}
+                        className="max-w-64 text-xs text-muted-foreground"
+                      >
+                        {modelsLoading
+                          ? '正在加载模型列表…'
+                          : modelsQueryFailed
+                            ? models
+                              ? '模型列表刷新失败，仍可使用已加载的模型。'
+                              : `模型列表加载失败：${modelsQueryError instanceof Error ? modelsQueryError.message : '请重试'}`
+                            : isVideoTab
+                              ? '尚未配置可用的视频模型。'
+                              : '尚未配置可用的图像模型。'}
+                        {modelsQueryFailed && (
+                          <button
+                            type="button"
+                            onClick={() => void refetchModels()}
+                            className="ml-1 font-medium text-foreground underline underline-offset-2"
+                          >
+                            重试
+                          </button>
+                        )}
+                      </p>
                     )}
-                  </select>
+                  </div>
 
                   {/* One renderer for both media kinds, driven entirely by the
                       selected model's declared descriptors. The image branch used
@@ -551,10 +653,12 @@ export function GenerateConsole() {
                   />
                   {editing ? (
                     <span className="flex flex-col gap-1">
-                      <span className="px-0.5 text-[11px] font-medium text-muted-foreground">尺寸</span>
+                      <span className="px-0.5 text-overline text-muted-foreground">尺寸</span>
+                      {/* Read-only output, so a `title` alone would hide the reason
+                          from keyboard and touch users: the text says it outright. */}
                       <span
                         title="局部修改的输出尺寸由服务端按源图比例决定"
-                        className="rounded-[var(--radius-control)] border border-border bg-surface-subtle px-2.5 py-1.5 text-xs font-medium text-muted-foreground"
+                        className="flex min-h-[var(--control-sm)] items-center rounded-control bg-tonal px-3 text-xs text-muted-foreground"
                       >
                         按源图比例自动
                       </span>
@@ -577,93 +681,73 @@ export function GenerateConsole() {
                 </div>
 
                 {/* Generate Button */}
-                <div className="flex items-center gap-3">
-                  {editing ? (
-                    editBlockedReason && (
-                      <span className="text-xs font-medium text-muted-foreground">{editBlockedReason}</span>
-                    )
-                  ) : (
-                    isPreparingReferences ? (
-                      <span className="text-xs font-medium text-muted-foreground">正在校验{inputNoun}…</span>
-                    ) : isReferenceUploadBusy ? (
-                      <span className="text-xs font-medium text-muted-foreground">{inputNoun}上传中…</span>
-                    ) : null
+                <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-3">
+                  {submitBlockedReason && (
+                    <span
+                      id="generate-submit-blocker"
+                      role="status"
+                      aria-live="polite"
+                      className="max-w-full break-words text-xs font-medium text-muted-foreground"
+                    >
+                      {submitBlockedReason}
+                    </span>
                   )}
 
-                  <button
+                  {/* `loading` keeps the action name and the button width while the
+                      job is in flight, instead of renaming the control to 处理中 —
+                      states.md §4: 异步保留宽度和动作名称。 */}
+                  <Button
                     type="button"
+                    variant="primary"
                     onClick={() => handleGenerate()}
-                    disabled={
-                      editing
-                        ? editMutation.isPending || Boolean(editBlockedReason)
-                        : createJobMutation.isPending || selectedJobActive || isPreparingReferences || isReferenceUploadBusy
-                    }
+                    disabled={Boolean(submitBlockedReason)}
+                    loading={editing ? editMutation.isPending : createJobMutation.isPending || selectedJobActive}
+                    aria-describedby={submitBlockedReason ? 'generate-submit-blocker' : undefined}
                     title={editing ? (editBlockedReason ?? '提交局部修改') : undefined}
-                    className="flex min-h-10 items-center gap-2 rounded-[var(--radius-control)] bg-primary px-5 text-sm font-medium text-canvas transition-colors duration-[var(--motion-fast)] hover:bg-primary-hover disabled:opacity-50"
+                    className="px-5"
+                    icon={<Sparkles aria-hidden="true" />}
                   >
-                    {(editing ? editMutation.isPending : createJobMutation.isPending || selectedJobActive) ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>处理中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4" />
-                        <span>{editing ? '提交局部修改' : '立即生成'}</span>
-                      </>
-                    )}
-                  </button>
+                    {editing ? '提交局部修改' : '立即生成'}
+                  </Button>
                 </div>
               </div>
-            </div>
+            </Card>
 
             {errorMessage && (
-              /* `bg-danger-soft` alone against `bg-canvas` is a ~1.5% luminance
-                 step, so the state keeps a solid left bar as well. */
-              <div
-                role="alert"
-                className="rounded-[var(--radius-control)] border-l-4 border-danger bg-danger-soft p-3 text-xs text-danger"
-              >
+              <Alert tone="danger" role="alert" title="无法开始生成">
                 {errorMessage}
-              </div>
+              </Alert>
             )}
 
             {/* The rail is `hidden md:flex`, so below `md` this is the only way to
-                see or cancel a running task. */}
-            <div className="md:hidden">
-              <ActiveJobsBoard {...boardProps} variant="inline" hideWhenEmpty />
-            </div>
-
-            {showVideoEmptyState ? (
-              <div className="flex flex-1 flex-col items-center justify-center rounded-[var(--radius-card)] bg-surface-subtle/60 p-6 text-center">
-                <Film aria-hidden="true" className="h-8 w-8 text-muted-foreground" />
-                <p className="mt-3 text-sm font-semibold text-foreground">尚未配置视频模型</p>
-                <p className="mt-1 max-w-md text-xs text-muted-foreground">
-                  请由管理员在「媒体模型」中启用 Seedance 或 Veo 视频预设，并为对应供应商配置凭据；
-                  启用后刷新本页即可开始视频生成。
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">当前图像生成不受影响</p>
+                see or cancel a running task for image generation. Video page omits md:hidden area to match image generation desktop styling. */}
+            {!isVideoTab && (
+              <div className="md:hidden">
+                <ActiveJobsBoard {...boardProps} variant="inline" hideWhenEmpty />
               </div>
-            ) : editing && editTarget ? (
+            )}
+
+            {editing && editTarget ? (
               /* Edit mode owns the whole stage: the source picture, the rectangle
                  and nothing else. It is a branch *before* the job card rather than
                  a swap inside it because a 局部修改 can also be entered from the
                  library, where there may be no selected job at all. */
-              <div className="flex flex-col items-center gap-4 rounded-[var(--radius-card)] bg-surface p-6 shadow-md">
+              <Card className="items-center">
                 <div className="flex w-full max-w-3xl flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <Crop className="h-4 w-4 text-accent" aria-hidden="true" />
-                    <span className="text-xs font-medium text-foreground">局部修改</span>
+                    <Crop className="h-[var(--icon-sm)] w-[var(--icon-sm)] text-primary" aria-hidden="true" />
+                    <CardTitle level={3} className="text-sm">局部修改</CardTitle>
                     <span className="text-xs text-muted-foreground">· 源图保持不变，结果作为新任务生成</span>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setEditTarget(null)}
-                    className="flex min-h-8 items-center gap-1 rounded-[var(--radius-control)] border border-border bg-surface px-2.5 py-1 text-xs text-foreground transition-colors duration-[var(--motion-fast)] hover:bg-surface-subtle"
+                    icon={<X aria-hidden="true" />}
                   >
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
                     退出局部修改
-                  </button>
+                  </Button>
                 </div>
 
                 <EditRegionStage
@@ -674,64 +758,79 @@ export function GenerateConsole() {
                   selection={editTarget.selection}
                   onSelectionChange={setEditSelection}
                 />
-              </div>
+              </Card>
             ) : selectedJob ? (
               /* Main Stage Display Area. Sized by its content on purpose: the old
                  `flex-1 justify-center` swallowed whatever height the shorter
                  16:9 video left over and showed it as blank below the player. */
-              <div className="flex flex-col items-center gap-4 rounded-[var(--radius-card)] bg-surface p-6 shadow-md">
+              <Card className="items-center">
                 <div className="flex w-full flex-col gap-4">
                   {/* Header of selected job */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
                       <JobStatusBadge status={selectedJob.status} busy={selectedJobActive} />
-                      <span className="text-xs text-muted-foreground">{selectedJob.modelName}</span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="truncate text-xs text-muted-foreground">{selectedJob.modelName}</span>
+                      <span aria-hidden="true" className="text-xs text-muted-foreground">·</span>
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
                         {new Date(selectedJob.createdAt).toLocaleTimeString()}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {selectedJobActive && (
-                        <button
+                        // 中止 is not a high-risk destructive confirm, so it is a
+                        // ghost button with danger text, never a solid red one.
+                        <Button
                           type="button"
+                          variant="danger-ghost"
+                          size="sm"
                           onClick={() => cancelJobMutation.mutate(selectedJob.id)}
-                          disabled={cancelJobMutation.isPending || selectedJob.cancelRequested}
-                          className="flex min-h-8 items-center gap-1 rounded-[var(--radius-control)] border border-border px-2.5 py-1 text-xs text-danger hover:bg-danger-soft/20 disabled:text-muted-foreground disabled:hover:bg-transparent"
+                          disabled={Boolean(selectedJob.cancelRequested)}
+                          loading={cancelJobMutation.isPending}
+                          icon={<XCircle aria-hidden="true" />}
                         >
-                          <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
                           {selectedJob.cancelRequested ? '取消中' : '取消任务'}
-                        </button>
+                        </Button>
                       )}
 
                       {selectedJob.status === 'failed' && (
-                        <button
+                        <Button
                           type="button"
+                          variant="secondary"
+                          size="sm"
                           onClick={() => retryJobMutation.mutate(selectedJob.id)}
-                          disabled={retryJobMutation.isPending}
-                          className="flex items-center gap-1 rounded-[var(--radius-control)] border border-border px-2.5 py-1 text-xs text-foreground hover:bg-surface"
+                          loading={retryJobMutation.isPending}
+                          icon={<RefreshCw aria-hidden="true" />}
                         >
-                          <RefreshCw className="h-3.5 w-3.5" />
                           重试
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
 
                   {/* Job Prompt */}
-                  <p className="text-xs text-foreground/80">{selectedJob.prompt}</p>
+                  <p className="text-sm text-foreground">{selectedJob.prompt}</p>
 
                   {/* Job Content / Outputs */}
+                  {selectedJobActive && (
+                    <Progress
+                      value={null}
+                      label={stageIsVideo ? '正在渲染视频' : '正在生成画面'}
+                      showLabelRow={false}
+                      size="md"
+                      className="w-full max-w-3xl"
+                    />
+                  )}
                   {selectedJob.status === 'succeeded' && stageOutputs.length > 0 ? (
                     <div
-                      className={`grid gap-4 ${
+                      className={cn(
+                        'grid w-full gap-4',
                         stageOutputs.length === 1
                           ? singleOutputClass
                           : stageOutputs.length === 2
                             ? 'grid-cols-2'
-                            : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-4'
-                      }`}
+                            : 'grid-cols-2 md:grid-cols-4',
+                      )}
                     >
                       {stageOutputs.map((output) => {
                         const src = outputUrl(output)
@@ -743,7 +842,7 @@ export function GenerateConsole() {
                         return (
                           <div
                             key={output.id}
-                            className="group relative overflow-hidden rounded-[var(--radius-control)] bg-surface shadow-sm"
+                            className="group relative overflow-hidden rounded-control bg-surface"
                           >
                             <MediaFrame
                               src={src}
@@ -758,29 +857,35 @@ export function GenerateConsole() {
                               showControls={isVideo}
                             />
                             {/* A <video controls> owns its own control bar, so the
-                                hover download overlay is only for still images. */}
+                                hover download overlay is only for still images.
+                                `.media-tile-actions` is what makes the pair
+                                reachable without hover on touch devices. */}
                             {!isVideo && (
-                              <div className="absolute inset-0 flex items-end justify-end gap-2 bg-overlay/40 p-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                                <button
+                              <div className="media-tile-actions media-scrim absolute inset-0 flex items-end justify-end gap-2 p-2 opacity-0 motion-hover-fade group-hover:opacity-100 group-focus-within:opacity-100">
+                                <Button
                                   type="button"
+                                  variant="secondary"
+                                  size="sm"
                                   onClick={() => startRegionEdit(output)}
                                   disabled={!canEdit}
                                   title={canEdit ? '局部修改：框选一个区域后描述修改' : (maskBlockedReason ?? '当前模型不支持局部修改')}
                                   aria-label="局部修改"
-                                  className="flex items-center gap-1 rounded-[var(--radius-control)] bg-surface/90 px-2 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="bg-surface text-xs"
+                                  icon={<Crop aria-hidden="true" />}
                                 >
-                                  <Crop className="h-3.5 w-3.5" aria-hidden="true" />
                                   局部修改
-                                </button>
+                                </Button>
+                                {/* Navigation to a file is a link, not a button. */}
                                 <a
                                   href={src}
                                   target="_blank"
                                   rel="noreferrer"
                                   download
-                                  className="rounded-[var(--radius-control)] bg-surface/90 p-1.5 text-foreground shadow-sm hover:bg-surface"
+                                  aria-label="下载原图"
                                   title="下载原图"
+                                  className={buttonVariants({ variant: 'secondary', size: 'sm', iconOnly: true })}
                                 >
-                                  <Download className="h-3.5 w-3.5" />
+                                  <Download aria-hidden="true" />
                                 </a>
                               </div>
                             )}
@@ -789,25 +894,44 @@ export function GenerateConsole() {
                       })}
                     </div>
                   ) : selectedJobActive ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                      <p className="mt-3 text-sm font-medium text-foreground">
-                        {stageIsVideo ? 'AI 正在渲染视频...' : 'AI 正在绘制画面...'}
+                    <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+                      <Spinner size="lg" label="正在生成" className="text-primary" />
+                      <p className="text-sm font-medium text-foreground">
+                        {stageIsVideo ? 'AI 正在渲染视频…' : 'AI 正在绘制画面…'}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">任务正在后端集群队列调度中</p>
+                      <p className="text-xs text-muted-foreground">任务正在后端集群队列调度中，可以离开本页，完成后会在任务面板提示。</p>
                     </div>
                   ) : selectedJob.status === 'failed' ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center text-danger">
-                      <p className="font-semibold text-sm">生成未完成</p>
-                      <p className="mt-1 max-w-md text-xs">
-                        {selectedJob.errorMessage ?? selectedJob.errorCode ?? '未知生成错误'}
-                      </p>
-                    </div>
+                    <EmptyState
+                      variant="error"
+                      title="生成未完成"
+                      description={selectedJob.errorMessage ?? selectedJob.errorCode ?? '服务端返回了未知错误，请重试或更换模型。'}
+                      action={
+                        <Button
+                          variant="secondary"
+                          onClick={() => retryJobMutation.mutate(selectedJob.id)}
+                          loading={retryJobMutation.isPending}
+                          icon={<RefreshCw aria-hidden="true" />}
+                        >
+                          重试任务
+                        </Button>
+                      }
+                    />
                   ) : (
-                    <div className="py-12 text-center text-xs text-muted-foreground">暂无可用生成画面</div>
+                    <EmptyState
+                      variant="no-results"
+                      objectName="生成画面"
+                      title="暂无可用生成画面"
+                      description="这次任务没有产出可展示的画面，重新提交一次即可。"
+                      action={
+                        <Button variant="secondary" onClick={() => void handleGenerate()} icon={<Sparkles aria-hidden="true" />}>
+                          立即生成
+                        </Button>
+                      }
+                    />
                   )}
                 </div>
-              </div>
+              </Card>
             ) : null}
           </div>
         </div>
@@ -819,115 +943,131 @@ export function GenerateConsole() {
         <aside
           aria-label="任务面板"
           inert={!railOpen}
-          className={`bg-surface transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-standard)] ${
-            railOpen ? 'w-72 shrink-0' : 'w-0 shrink-0 overflow-hidden'
-          } hidden md:flex md:flex-col`}
+          className={cn(
+            'hidden shrink-0 flex-col bg-surface transition-[width] md:flex',
+            'duration-[var(--motion-overlay)] ease-[var(--ease-standard)]',
+            railOpen ? 'w-72' : 'w-0 overflow-hidden',
+          )}
         >
-          <div className="flex h-14 shrink-0 items-center justify-between px-4">
+          <div className="flex h-[var(--layout-header)] shrink-0 items-center justify-between px-4">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Clock className="h-[var(--icon-sm)] w-[var(--icon-sm)] text-muted-foreground" aria-hidden="true" />
               <span className="text-xs font-medium text-foreground">任务面板</span>
             </div>
-            <button
+            <IconButton
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setRailOpen(false)}
               aria-label="收起任务面板"
               title="收起任务面板"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground hover:bg-surface-subtle hover:text-foreground"
-            >
-              <PanelRightClose className="h-4 w-4" aria-hidden="true" />
-            </button>
+              icon={<PanelRightClose aria-hidden="true" />}
+            />
           </div>
 
           <ActiveJobsBoard {...boardProps} open={activeBoardOpen} onToggle={setActiveBoardOpen} />
 
           {/* The rule that used to split the board from 历史 is now just air. */}
           <h2 id="gen-history-heading" className="shrink-0 px-2 pt-6 text-sm">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               aria-expanded={historyOpen}
               aria-controls="gen-history-list"
               onClick={() => setHistoryOpen(!historyOpen)}
-              className="flex min-h-8 w-full items-center gap-2 rounded-[var(--radius-control)] px-1.5 text-left text-sm font-medium text-foreground hover:bg-surface-subtle"
+              className="w-full justify-start px-2 text-left"
+              icon={<ChevronRight aria-hidden="true" className={cn('motion-position', historyOpen && 'rotate-90')} />}
             >
-              <ChevronRight
-                className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-fast)] ease-[var(--ease-standard)] ${
-                  historyOpen ? 'rotate-90' : ''
-                }`}
-                aria-hidden="true"
-              />
               <span>历史</span>
               {jobs.length > 0 && (
                 <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">
                   {jobs.length}
                 </span>
               )}
-            </button>
+            </Button>
           </h2>
 
           <div
             id="gen-history-list"
             aria-labelledby="gen-history-heading"
-            className={
-              historyOpen ? 'min-h-0 flex-1 space-y-2 overflow-y-auto p-3' : 'hidden'
-            }
+            className={historyOpen ? 'min-h-0 flex-1 overflow-y-auto p-2' : 'hidden'}
           >
             {jobsLoading ? (
-              <div className="py-12 text-center text-xs text-muted-foreground">
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" aria-hidden="true" />
-                <span className="sr-only">加载历史记录中…</span>
+              <div aria-busy="true" className="flex flex-col gap-2 py-2">
+                <span className="sr-only">加载历史记录中</span>
+                {Array.from({ length: 4 }, (_, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <SkeletonTile className="h-12 w-12 shrink-0 basis-auto" />
+                    <SkeletonRow cells={2} className="min-w-0 flex-1" />
+                  </div>
+                ))}
               </div>
             ) : jobs.length > 0 ? (
-              jobs.map((j) => {
-                const isSelected = j.id === (selectedJob?.id || '')
-                const firstOutput = (j.outputs ?? [])[0]
-                return (
-                  <button
-                    key={j.id}
-                    type="button"
-                    onClick={() => selectJob(j.id)}
-                    aria-current={isSelected ? 'true' : undefined}
-                    className={`relative flex w-full min-w-0 gap-3 rounded-[var(--radius-control)] p-2.5 text-left transition-colors duration-[var(--motion-fast)] ${
-                      isSelected ? 'bg-accent-soft' : 'bg-surface-subtle/60 hover:bg-surface-subtle'
-                    }`}
-                  >
-                    {/* `border-accent` used to be the only selected marker. A 3px
-                        bar carries the same signal without drawing a box — same
-                        treatment the 进行中 rows already use. */}
-                    {isSelected && (
-                      <span
-                        className="absolute inset-y-2 left-0 w-[3px] rounded-[var(--radius-pill)] bg-accent"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded bg-surface-subtle">
-                      {firstOutput ? (
-                        <MediaFrame
-                          src={outputUrl(firstOutput)}
-                          kind={isVideoOutput(firstOutput) ? 'video' : 'image'}
-                          alt=""
-                          layout="thumb"
-                          durationSeconds={
-                            isVideoOutput(firstOutput) ? firstOutput.metadata.durationSeconds : undefined
-                          }
-                          hasAudio={isVideoOutput(firstOutput) ? firstOutput.metadata.hasAudio : undefined}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-                      <p className="truncate text-xs font-medium text-foreground">{j.prompt}</p>
-                      <div className="flex min-w-0 items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-xs text-muted-foreground">
-                          {j.modelName}
-                        </span>
-                        <JobStatusBadge status={j.status} />
-                      </div>
-                    </div>
-                  </button>
-                )
-              })
+              <ul className="m-0 flex list-none flex-col gap-2 p-0" role="list">
+                {jobs.map((j) => {
+                  const isSelected = j.id === (selectedJob?.id || '')
+                  const firstOutput = (j.outputs ?? [])[0]
+                  return (
+                    <li key={j.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectJob(j.id)}
+                        aria-current={isSelected ? 'true' : undefined}
+                        className={cn(
+                          'relative flex w-full min-w-0 gap-3 rounded-control p-2.5 pl-3 text-left transition-colors',
+                          'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+                          isSelected
+                            ? 'bg-tonal-selected'
+                            : 'bg-tonal enabled:hover:bg-tonal-hover',
+                        )}
+                      >
+                        {/* Selection rides the 4px primary bar plus the tonal step:
+                            the brand green is a status colour, never a selection one. */}
+                        {isSelected && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-y-2 left-0 w-1 rounded-pill bg-primary"
+                          />
+                        )}
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-control bg-tonal">
+                          {firstOutput ? (
+                            <MediaFrame
+                              src={outputUrl(firstOutput)}
+                              kind={isVideoOutput(firstOutput) ? 'video' : 'image'}
+                              alt=""
+                              layout="thumb"
+                              durationSeconds={
+                                isVideoOutput(firstOutput) ? firstOutput.metadata.durationSeconds : undefined
+                              }
+                              hasAudio={isVideoOutput(firstOutput) ? firstOutput.metadata.hasAudio : undefined}
+                            />
+                          ) : (
+                            <ImageOff aria-hidden="true" className="h-[var(--icon-md)] w-[var(--icon-md)] text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+                          <p className="truncate text-xs font-medium text-foreground">{j.prompt}</p>
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-xs text-muted-foreground">
+                              {j.modelName}
+                            </span>
+                            <JobStatusBadge status={j.status} />
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
             ) : (
-              <div className="py-12 text-center text-xs text-muted-foreground">暂无生成记录</div>
+              <EmptyState
+                variant="first-use"
+                objectName="生成记录"
+                density="compact"
+                title="还没有生成记录"
+                description="写下提示词并开始生成，这里会留下你最近的任务。"
+              />
             )}
           </div>
         </aside>
@@ -936,15 +1076,16 @@ export function GenerateConsole() {
             12px from the top, 16px from the right, 32x32, 16px glyph — so
             collapsing the rail never makes the button jump 68px down. */}
         {!railOpen && (
-          <button
+          <IconButton
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setRailOpen(true)}
             aria-label="展开任务面板"
             title="展开任务面板"
-            className="absolute right-4 top-3 hidden h-8 w-8 items-center justify-center rounded-[var(--radius-control)] bg-surface text-muted-foreground shadow-md hover:text-foreground md:flex"
-          >
-            <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
-          </button>
+            className="absolute right-4 top-3 hidden bg-surface shadow-soft md:inline-flex"
+            icon={<PanelRightOpen aria-hidden="true" />}
+          />
         )}
       </div>
     </div>

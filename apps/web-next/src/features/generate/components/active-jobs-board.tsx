@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, RefreshCw, XCircle } from 'lucide-react'
 import { JobStatusBadge } from '@/shared/components/job-status-badge'
 import { MediaFrame } from '@/shared/components/media-frame'
-import { formatElapsed, isJobActive, phaseLabel } from '@/shared/lib/job-status'
+import { Alert, Button, Card, Progress, SkeletonRow } from '@/shared/components/ui'
+import { formatElapsed, isJobActive, jobStatusMeta, phaseLabel } from '@/shared/lib/job-status'
+import { cn } from '@/shared/lib/cn'
 import { isVideoOutput, outputUrl } from '@/shared/types'
 import type { GenerationJob } from '@/shared/types'
 
@@ -123,86 +125,74 @@ export function ActiveJobsBoard({
 
   if (hideWhenEmpty && rows.length === 0 && !isLoading && !isError) return null
 
-  return (
-    <section
-      aria-labelledby={headingId}
-      className={`flex min-h-0 shrink-0 flex-col ${
-        isRail ? '' : 'rounded-[var(--radius-card)] bg-surface shadow-md'
-      }`}
-    >
-      {isRail ? (
-        <h2 id={headingId} className="shrink-0 px-2 pt-2 text-sm">
-          <button
-            ref={headingRef}
-            type="button"
-            aria-expanded={open}
-            aria-controls={listId}
-            onClick={() => onToggle?.(!open)}
-            className="flex min-h-8 w-full items-center gap-2 rounded-[var(--radius-control)] px-1.5 text-left text-sm font-medium text-foreground hover:bg-surface-subtle"
-          >
-            <ChevronRight
-              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-fast)] ease-[var(--ease-standard)] ${
-                open ? 'rotate-90' : ''
-              }`}
-              aria-hidden="true"
-            />
-            <span>进行中</span>
-            {count > 0 && (
-              <span className="font-mono text-xs tabular-nums text-muted-foreground">{count}</span>
-            )}
-          </button>
-        </h2>
-      ) : (
-        <h2
-          id={headingId}
-          className="flex shrink-0 items-center gap-2 px-3 pt-3 text-sm text-foreground"
-        >
-          进行中
-          {count > 0 && (
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">{count}</span>
-          )}
-        </h2>
+  const heading = isRail ? (
+    <h2 id={headingId} className="shrink-0 text-sm">
+      <Button
+        ref={headingRef}
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => onToggle?.(!open)}
+        className="w-full justify-start px-2 text-left"
+        icon={<ChevronRight aria-hidden="true" className={cn('motion-position', open && 'rotate-90')} />}
+      >
+        <span>进行中</span>
+        {count > 0 && (
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">{count}</span>
+        )}
+      </Button>
+    </h2>
+  ) : (
+    <h2 id={headingId} className="flex shrink-0 items-center gap-2 text-sm text-foreground">
+      进行中
+      {count > 0 && (
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">{count}</span>
       )}
+    </h2>
+  )
 
+  const body = (
+    <>
       {isError ? (
-        <div className="flex items-center justify-between gap-2 px-3 py-3">
-          <p className="min-w-0 text-xs text-muted-foreground">任务列表获取失败</p>
-          <button
-            type="button"
-            onClick={onReload}
-            className="flex min-h-8 shrink-0 items-center gap-1 rounded-[var(--radius-control)] px-2 text-xs font-medium text-foreground hover:bg-surface-subtle"
-          >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            重试
-          </button>
-        </div>
+        <Alert
+          tone="danger"
+          title="无法读取任务列表"
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onReload}
+              icon={<RefreshCw aria-hidden="true" />}
+            >
+              重试
+            </Button>
+          }
+        >
+          列表刷新失败，请稍后重试。
+        </Alert>
       ) : rows.length === 0 && !open ? null : rows.length === 0 ? (
-        <div className="px-3 pb-3 pt-2">
-          {isLoading ? (
-            <div aria-busy="true" className="flex flex-col gap-3">
-              <p className="text-xs text-muted-foreground">加载任务中…</p>
-              <div aria-hidden="true" className="flex flex-col gap-2">
-                <span className="h-4 w-24 rounded-[var(--radius-pill)] bg-surface-subtle" />
-                <span className="h-4 w-full rounded bg-surface-subtle" />
-                <span className="h-3 w-2/3 rounded bg-surface-subtle" />
-              </div>
-              <div aria-hidden="true" className="flex flex-col gap-2">
-                <span className="h-4 w-20 rounded-[var(--radius-pill)] bg-surface-subtle" />
-                <span className="h-4 w-5/6 rounded bg-surface-subtle" />
-                <span className="h-3 w-1/2 rounded bg-surface-subtle" />
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">当前没有进行中的任务</p>
-          )}
-        </div>
+        isLoading ? (
+          <div aria-busy="true" className="flex flex-col gap-3 py-2">
+            <span className="sr-only">加载任务中</span>
+            <SkeletonRow cells={2} cellWidth="96px" />
+            <SkeletonRow cells={3} />
+            <SkeletonRow cells={2} cellWidth="96px" />
+            <SkeletonRow cells={3} />
+          </div>
+        ) : (
+          <p className="py-2 text-xs text-muted-foreground">当前没有进行中的任务</p>
+        )
       ) : (
         <ul
           id={listId}
           role="list"
-          className={`m-0 list-none space-y-1 overflow-y-auto p-0 ${
-            open ? '' : 'hidden'
-          } ${isRail ? 'max-h-64' : ''}`}
+          className={cn(
+            'm-0 list-none flex flex-col gap-1 overflow-y-auto p-0',
+            !open && 'hidden',
+            isRail && 'max-h-64',
+          )}
         >
           {rows.map((job) => (
             <ActiveJobRow
@@ -224,7 +214,21 @@ export function ActiveJobsBoard({
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
+    </>
+  )
+
+  // `rail` is a bare column in the sidebar; `inline` is the standalone mobile copy
+  // and therefore a card. Same children, one surface decision.
+  return isRail ? (
+    <section aria-labelledby={headingId} className="flex min-h-0 shrink-0 flex-col gap-1 px-2 pb-2">
+      {heading}
+      {body}
     </section>
+  ) : (
+    <Card aria-labelledby={headingId} density="compact" className="min-h-0 shrink-0 gap-3">
+      {heading}
+      {body}
+    </Card>
   )
 }
 
@@ -253,7 +257,6 @@ function ActiveJobRow({
 }: ActiveJobRowProps) {
   const active = isJobActive(job)
   const firstOutput = job.outputs?.[0]
-  const cancelling = Boolean(job.cancelRequested) || pendingCancelId === job.id
   // `progress` is binary in the worker, so the ticking clock is the only liveness
   // signal between 2.5s polls; it stops at `completedAt` once the job settles.
   const clockEnd = job.completedAt ? Date.parse(job.completedAt) : now
@@ -289,19 +292,16 @@ function ActiveJobRow({
   return (
     <li
       data-job-row={job.id}
-      className={`relative flex gap-2 rounded-[var(--radius-control)] p-3 transition-opacity duration-[var(--motion-slow)] ease-[var(--ease-standard)] ${
-        expiringAt !== undefined && expiringAt - now <= FADE_MS ? 'opacity-0' : 'opacity-100'
-      } ${active ? 'bg-surface-subtle' : 'bg-surface-subtle/50'}`}
-    >
-      {active && (
-        <span
-          aria-hidden="true"
-          className="absolute inset-y-2 left-0 w-[3px] rounded-[var(--radius-pill)] bg-accent"
-        />
+      className={cn(
+        'relative flex gap-3 rounded-control p-3',
+        // The row leaves the list on a token exit, not a hand-set opacity: same
+        // 160ms ease-in every other departing surface uses.
+        expiringAt !== undefined && expiringAt - now <= FADE_MS && 'motion-fade-out',
+        selected ? 'bg-tonal-selected' : active ? 'bg-tonal' : 'bg-neutral-soft',
       )}
-
+    >
       {firstOutput && (
-        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-[var(--radius-control)] bg-surface-subtle">
+        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-tonal">
           <MediaFrame
             src={outputUrl(firstOutput)}
             kind={firstOutput.mediaKind}
@@ -326,42 +326,56 @@ function ActiveJobRow({
           </span>
         </div>
 
-        <button
+        {active && (
+          // The worker writes `progress` as 0 or 100, so there is no real percentage
+          // to claim: the indeterminate track says "working" without inventing a
+          // number, and the ticking clock above carries the liveness.
+          <Progress value={null} label={stage || '生成中'} showLabelRow={false} />
+        )}
+
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => onSelectJob(job.id)}
           aria-current={selected ? 'true' : undefined}
-          className="line-clamp-2 min-w-0 text-left text-sm leading-[1.5] text-foreground hover:text-accent-strong"
+          className="w-full justify-start whitespace-normal px-2 text-left"
         >
-          {job.prompt}
-        </button>
+          <span className="line-clamp-2 leading-[1.5]">{job.prompt}</span>
+        </Button>
 
         <div className="flex items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{meta}</p>
 
           {active && (
-            <button
+            <Button
               type="button"
+              variant="danger-ghost"
+              size="sm"
               onClick={() => onCancel(job.id)}
-              disabled={cancelling}
+              disabled={Boolean(job.cancelRequested)}
+              loading={pendingCancelId === job.id}
               aria-label={`取消任务：${job.prompt.slice(0, 20)}`}
-              className="flex min-h-8 shrink-0 items-center gap-1 rounded-[var(--radius-control)] px-2 text-xs font-medium text-danger hover:bg-danger-soft disabled:text-muted-foreground disabled:hover:bg-transparent"
+              className="px-2 text-xs"
+              icon={<XCircle aria-hidden="true" />}
             >
-              <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-              {cancelling ? '取消中' : '取消'}
-            </button>
+              {job.cancelRequested ? '取消中' : '取消'}
+            </Button>
           )}
 
           {job.status === 'failed' && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => onRetry(job.id)}
-              disabled={pendingRetryId === job.id}
+              loading={pendingRetryId === job.id}
               aria-label={`重试任务：${job.prompt.slice(0, 20)}`}
-              className="flex min-h-8 shrink-0 items-center gap-1 rounded-[var(--radius-control)] px-2 text-xs font-medium text-foreground hover:bg-surface-subtle"
+              className="px-2 text-xs"
+              icon={<RefreshCw aria-hidden="true" />}
             >
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               重试
-            </button>
+            </Button>
           )}
         </div>
 

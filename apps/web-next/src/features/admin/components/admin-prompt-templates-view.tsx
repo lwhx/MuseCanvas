@@ -4,8 +4,26 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS, type PromptTemplateSetDetailDto } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
-import { Download, FileText, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Dialog } from '@/shared/components/ui/dialog'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardDescription,
+  CardTitle,
+  EmptyState,
+  FormField,
+  IconButton,
+  Input,
+  PageHeader,
+  SkeletonText,
+  SkeletonTile,
+  Textarea,
+  buttonVariants,
+} from '@/shared/components/ui'
+import { Download, FileText, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 export function AdminPromptTemplatesView() {
   const queryClient = useQueryClient()
@@ -18,12 +36,16 @@ export function AdminPromptTemplatesView() {
   const {
     data: activeSet,
     isLoading,
+    isError,
+    error,
+    isFetching,
     refetch,
   } = useQuery<PromptTemplateSetDetailDto | null>({
     queryKey: ['admin', 'prompt-templates'],
     queryFn: async () => {
       const res = await api<PromptTemplateSetDetailDto | null>(API_ENDPOINTS.admin.promptTemplates)
-      return res.success ? res.data ?? null : null
+      if (!res.success) throw new Error(res.error?.message || '加载提示词模板失败')
+      return res.data ?? null
     },
   })
 
@@ -70,170 +92,191 @@ export function AdminPromptTemplatesView() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">提示词模板</h1>
-          <p className="text-sm text-muted-foreground">
-            {activeSet
-              ? `当前激活模板集：${activeSet.name}（v${activeSet.version}，${activeSet.entryCount} 个条目），供创作台快捷调用。`
-              : '管理系统预置与分类提示词模板，供用户在创作台快捷调用。'}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {activeSet && (
-            <a
-              href={`${API_ENDPOINTS.admin.promptTemplatesExport}?setId=${encodeURIComponent(activeSet.id)}`}
-              className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="提示词模板"
+        description={
+          activeSet
+            ? `当前激活模板集：${activeSet.name}（第 ${activeSet.version} 版，${activeSet.entryCount} 个条目），供创作台快捷调用。`
+            : '管理系统预置与分类提示词模板，供用户在创作台快捷调用。'
+        }
+        actions={
+          <>
+            {activeSet ? (
+              <a
+                href={`${API_ENDPOINTS.admin.promptTemplatesExport}?setId=${encodeURIComponent(activeSet.id)}`}
+                className={buttonVariants({ variant: 'secondary' })}
+              >
+                <Download aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />
+                导出模板集
+              </a>
+            ) : null}
+            <Button
+              onClick={() => {
+                setActionError('')
+                setCreateModalOpen(true)
+              }}
+              disabled={!activeSet}
+              title={activeSet ? undefined : '请先导入并激活模板集'}
+              icon={<Plus aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
             >
-              <Download className="h-3.5 w-3.5" />
-              导出
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setActionError('')
-              setCreateModalOpen(true)
-            }}
-            disabled={!activeSet}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-3 text-xs font-medium text-accent-contrast transition-colors hover:bg-accent-hover disabled:opacity-50"
-            title={activeSet ? undefined : '请先导入并激活模板集'}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            添加模板
-          </button>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            刷新
-          </button>
-        </div>
-      </div>
-
-      {!isLoading && !activeSet && (
-        <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-surface-subtle px-4 py-3 text-xs text-muted-foreground">
-          <FileText className="h-3.5 w-3.5" />
-          当前没有激活的模板集。模板集通过初始化向导（/setup）导入；条目管理在激活集上进行。
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {isLoading ? (
-          <div className="col-span-full p-8 text-center text-muted-foreground">
-            <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-          </div>
-        ) : entries.length > 0 ? (
-          entries.map((t) => (
-            <div
-              key={t.id}
-              className="flex flex-col justify-between rounded-[var(--radius-card)] border border-border bg-surface p-4"
+              创建模板
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void refetch()}
+              loading={isFetching}
+              icon={<RefreshCw aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
             >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex rounded bg-surface-subtle px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {t.description || '通用模板'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm(`确认删除模板 ${t.name}？`)) {
-                        deleteMutation.mutate(t.id)
-                      }
-                    }}
-                    className="text-muted-foreground hover:text-danger p-1"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <h3 className="mt-2 font-semibold text-foreground text-sm">{t.name}</h3>
-                <p className="mt-1 text-xs text-muted-foreground line-clamp-3">{t.instruction}</p>
+              刷新
+            </Button>
+          </>
+        }
+      />
+
+      {isError ? (
+        <Alert
+          tone="danger"
+          role="alert"
+          title="无法加载提示词模板"
+          action={
+            <Button variant="secondary" size="sm" loading={isFetching} onClick={() => void refetch()}>
+              刷新重试
+            </Button>
+          }
+        >
+          {error instanceof Error ? `${error.message}。请确认管理后台会话仍然有效。` : '加载数据时出现问题，请稍后重试。'}
+        </Alert>
+      ) : null}
+
+      {!isLoading && !isError && !activeSet ? (
+        <Alert tone="info" role="status" title="当前没有激活的模板集">
+          <span className="flex items-start gap-2">
+            <FileText aria-hidden="true" className="mt-0.5 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0" />
+            模板集通过初始化向导（/setup）导入，条目管理在激活集上进行；激活模板集后即可创建模板。
+          </span>
+        </Alert>
+      ) : null}
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" role="status" aria-busy="true">
+          <span className="sr-only">正在加载提示词模板</span>
+          {Array.from({ length: 6 }, (_, index) => (
+            <Card key={index} aria-hidden="true" className="gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <SkeletonTile className="aspect-auto h-5 w-24" />
+                <SkeletonTile className="aspect-auto h-[var(--control-sm)] w-[var(--control-sm)]" />
               </div>
-            </div>
-          ))
-        ) : activeSet ? (
-          <div className="col-span-full rounded-[var(--radius-card)] border border-border bg-surface p-8 text-center text-muted-foreground">
-            暂无提示词模板
+              <SkeletonTile className="aspect-auto h-5 w-40" />
+              <SkeletonText lines={2} />
+            </Card>
+          ))}
+        </div>
+      ) : null}
+
+      {!isLoading && !isError && activeSet ? (
+        entries.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {entries.map((t) => (
+              <Card key={t.id} density="compact">
+                <CardBody className="gap-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <Badge tone="neutral">{t.description || '通用模板'}</Badge>
+                    <IconButton
+                      variant="danger-ghost"
+                      size="sm"
+                      aria-label={`删除提示词模板：${t.name}`}
+                      loading={deleteMutation.isPending && deleteMutation.variables === t.id}
+                      onClick={() => {
+                        if (confirm(`确认删除模板 ${t.name}？`)) {
+                          deleteMutation.mutate(t.id)
+                        }
+                      }}
+                      icon={<Trash2 aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+                    />
+                  </div>
+                  <CardTitle level={3}>{t.name}</CardTitle>
+                  <CardDescription className="line-clamp-3">{t.instruction}</CardDescription>
+                </CardBody>
+              </Card>
+            ))}
           </div>
-        ) : null}
-      </div>
+        ) : (
+          <Card>
+            <EmptyState
+              variant="first-use"
+              objectName="提示词模板"
+              actionLabel="创建第一个模板"
+              onAction={() => {
+                setActionError('')
+                setCreateModalOpen(true)
+              }}
+            />
+          </Card>
+        )
+      ) : null}
 
       {/* Create Modal */}
-      <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="添加提示词模板" panelClassName="max-w-md">
+      <Dialog
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        title="创建提示词模板"
+        size="narrow"
+      >
         <form
-          className="mt-4 space-y-4"
+          className="flex flex-col gap-6"
           onSubmit={(event) => {
             event.preventDefault()
             createMutation.mutate()
           }}
         >
-          {actionError && (
-            <div className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
+          {actionError ? (
+            <Alert tone="danger" role="alert">
               {actionError}
-            </div>
-          )}
+            </Alert>
+          ) : null}
 
-          <div className="space-y-3">
-            <div>
-              <label htmlFor="prompt-template-name" className="block text-xs font-medium text-foreground mb-1">模板名称</label>
-              <input
-                id="prompt-template-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="例如: 赛博朋克都市风格"
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-              />
-            </div>
+          <FormField label="模板名称" required>
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例如：赛博朋克都市风格"
+            />
+          </FormField>
 
-            <div>
-              <label htmlFor="prompt-template-description" className="block text-xs font-medium text-foreground mb-1">说明描述</label>
-              <input
-                id="prompt-template-description"
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="例如: 增强色彩对比与霓虹光效"
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-              />
-            </div>
+          <FormField label="说明描述" hint="用于创作台的标签位置，留空时显示为通用模板。">
+            <Input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="例如：增强色彩对比与霓虹光效"
+            />
+          </FormField>
 
-            <div>
-              <label htmlFor="prompt-template-instruction" className="block text-xs font-medium text-foreground mb-1">模板指令内容 (Instruction)</label>
-              <textarea
-                id="prompt-template-instruction"
-                rows={4}
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder="输入详细的提示词引导模板，支持 {'{{input_prompt}}'} 插值..."
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none resize-none"
-              />
-            </div>
-          </div>
+          <FormField
+            label="模板指令内容（Instruction）"
+            required
+            hint="发送给模型的正文模板，支持 {{input_prompt}} 插值。"
+          >
+            <Textarea
+              rows={4}
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder="输入详细的提示词引导模板…"
+            />
+          </FormField>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setCreateModalOpen(false)}
-              className="rounded-[var(--radius-control)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-subtle"
-            >
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setCreateModalOpen(false)}>
               取消
-            </button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending || !name.trim() || !instruction.trim()}
-              className="flex items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-4 py-1.5 text-xs font-medium text-accent-contrast hover:bg-accent-hover disabled:opacity-50"
-            >
-              {createMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            </Button>
+            <Button type="submit" disabled={!name.trim() || !instruction.trim()} loading={createMutation.isPending}>
               创建模板
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>
-
     </div>
   )
 }

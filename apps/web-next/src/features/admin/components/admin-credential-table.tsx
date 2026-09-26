@@ -1,12 +1,23 @@
 'use client'
 
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { ProviderCredential, ProviderTestStatus } from '@/shared/types'
 import { credentialPluginKey } from '../lib/provider-templates'
-import { Loader2, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  SkeletonRow,
+  Switch,
+} from '@/shared/components/ui'
 
 interface AdminCredentialTableProps {
   credentials: ProviderCredential[]
@@ -19,7 +30,12 @@ interface AdminCredentialTableProps {
   variant: 'media' | 'language'
   /** Model display names keyed by the credential id they are bound to. */
   linkedModels?: Record<string, string[]>
+  /** First-use copy: what is missing and how to create it. */
   emptyText: string
+  /** List request failed — renders the `error` empty state instead of first-use. */
+  error?: ReactNode
+  /** Retry handler for the `error` state; wired to the caller's existing `refetch`. */
+  onRetry?: () => void
 }
 
 const TEST_STATUS_LABEL: Record<ProviderTestStatus, string> = {
@@ -27,6 +43,8 @@ const TEST_STATUS_LABEL: Record<ProviderTestStatus, string> = {
   failed: '测试失败',
   not_tested: '未测试',
 }
+
+const COLUMN_COUNT = 6
 
 // Shared credential console merged out of the former 供应商凭据 page: list,
 // enable/disable, connectivity test and delete. Creation lives in each page's
@@ -37,6 +55,8 @@ export function AdminCredentialTable({
   variant,
   linkedModels = {},
   emptyText,
+  error,
+  onRetry,
 }: AdminCredentialTableProps) {
   const queryClient = useQueryClient()
   const [testingId, setTestingId] = useState<string | null>(null)
@@ -93,142 +113,177 @@ export function AdminCredentialTable({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-3">
       {actionError && (
-        <div className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
-          {actionError}
-        </div>
+        <Alert tone="danger" role="alert" title="凭据操作未完成">
+          {actionError}。请修正后重试；若多次失败，请确认服务端凭据配置后刷新列表。
+        </Alert>
       )}
-      <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface">
-        <table className="w-full text-left text-xs">
-          <thead className="border-b border-border bg-surface-subtle text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 font-medium">凭据名称</th>
-              <th className="px-4 py-3 font-medium">
-                {variant === 'media' ? '绑定插件' : '适配协议'}
-              </th>
-              <th className="px-4 py-3 font-medium">
-                {variant === 'media' ? '供应商 / 适配器' : '关联模型'}
-              </th>
-              <th className="px-4 py-3 font-medium">API Key 状态</th>
-              <th className="px-4 py-3 font-medium">状态</th>
-              <th className="px-4 py-3 text-right font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading ? (
+
+      <Card density="compact" className="gap-0 overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">
+              {variant === 'media' ? '媒体供应商凭据列表' : '语言模型供应商凭据列表'}
+            </caption>
+            <thead className="bg-tonal text-muted-foreground">
               <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin" aria-hidden="true" />
-                  <span className="sr-only">正在加载凭据</span>
-                </td>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  凭据名称
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  {variant === 'media' ? '绑定插件' : '适配协议'}
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  {variant === 'media' ? '供应商 / 适配器' : '关联模型'}
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  API Key 状态
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  状态
+                </th>
+                <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
+                  操作
+                </th>
               </tr>
-            ) : credentials.length > 0 ? (
-              credentials.map((c) => {
-                const pluginKey = credentialPluginKey(c)
-                const linked = linkedModels[c.id] || []
-                return (
-                  <tr key={c.id} className="hover:bg-surface-subtle/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      <div>{c.displayName}</div>
-                      {c.baseUrl && (
-                        <div className="break-all font-mono text-[11px] text-muted-foreground">{c.baseUrl}</div>
-                      )}
-                      <div className="font-mono text-[11px] text-muted-foreground">
-                        最近测试：{TEST_STATUS_LABEL[c.lastTestStatus] || c.lastTestStatus}
-                        {c.lastTestErrorCode ? `（${c.lastTestErrorCode}）` : ''}
-                      </div>
-                    </td>
-                    {variant === 'media' ? (
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-[11px] text-foreground">{pluginKey || '-'}</span>
-                      </td>
-                    ) : (
-                      <td className="px-4 py-3 font-mono text-muted-foreground">{c.adapter || '-'}</td>
-                    )}
-                    {variant === 'media' ? (
-                      <td className="px-4 py-3 font-mono text-muted-foreground">
-                        <div>{c.providerId || '-'}</div>
-                        <div>{c.adapter || '-'}</div>
-                      </td>
-                    ) : (
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {linked.length > 0 ? (
-                          <span className="text-foreground">{linked.join('、')}</span>
-                        ) : (
-                          <span>未关联模型</span>
-                        )}
-                      </td>
-                    )}
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ${
-                          c.hasApiKey || c.hasCredential ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
-                        }`}
-                      >
-                        {c.hasApiKey || c.hasCredential ? '已配置密钥' : '未设置密钥'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => toggleMutation.mutate({ id: c.id, enabled: !c.enabled })}
-                        aria-label={c.enabled ? `停用凭据 ${c.displayName}` : `启用凭据 ${c.displayName}`}
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                          c.enabled
-                            ? 'bg-success-soft text-success hover:bg-success-soft/80'
-                            : 'bg-surface-subtle text-muted-foreground hover:bg-surface-subtle-strong'
-                        }`}
-                      >
-                        {c.enabled ? '已启用' : '已停用'}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {testResult && testResult.id === c.id && (
-                          <span
-                            className={`text-[11px] ${testResult.success ? 'text-success' : 'text-danger'}`}
-                            role="status"
-                          >
-                            {testResult.msg}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleTest(c.id)}
-                          disabled={testingId === c.id}
-                          aria-label={`连通测试凭据 ${c.displayName}`}
-                          className="rounded-[var(--radius-control)] border border-border px-2 py-1 text-xs text-foreground hover:bg-surface-subtle disabled:opacity-50"
-                        >
-                          {testingId === c.id ? '测试中...' : '连通测试'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`确认删除凭据 ${c.displayName}？`)) {
-                              deleteMutation.mutate(c.id)
-                            }
-                          }}
-                          aria-label={`删除凭据 ${c.displayName}`}
-                          className="rounded-[var(--radius-control)] border border-border p-1 text-danger hover:bg-danger-soft/20"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
-                      </div>
+            </thead>
+            <tbody className="divide-y divide-border" aria-busy={isLoading || undefined}>
+              {isLoading ? (
+                Array.from({ length: 3 }, (_, index) => (
+                  <tr key={index}>
+                    <td colSpan={COLUMN_COUNT} className="px-4 py-2">
+                      <SkeletonRow cells={COLUMN_COUNT} className="py-1.5" />
                     </td>
                   </tr>
-                )
-              })
-            ) : (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                  {emptyText}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={COLUMN_COUNT}>
+                    <EmptyState
+                      variant="error"
+                      density="compact"
+                      objectName={variant === 'media' ? '媒体凭据' : '语言模型凭据'}
+                      title="无法加载凭据列表"
+                      description={
+                        typeof error === 'string'
+                          ? `${error}。请检查后端服务状态后重试。`
+                          : '加载凭据数据时出现问题，可能是服务暂时不可用。请稍后重试。'
+                      }
+                      action={onRetry ? <Button variant="secondary" onClick={onRetry}>刷新重试</Button> : undefined}
+                    />
+                  </td>
+                </tr>
+              ) : credentials.length > 0 ? (
+                credentials.map((c) => {
+                  const pluginKey = credentialPluginKey(c)
+                  const linked = linkedModels[c.id] || []
+                  const hasSecret = Boolean(c.hasApiKey || c.hasCredential)
+                  return (
+                    <tr
+                      key={c.id}
+                      className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
+                    >
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        <div>{c.displayName}</div>
+                        {c.baseUrl && (
+                          <div className="break-all font-mono text-xs font-normal text-muted-foreground">{c.baseUrl}</div>
+                        )}
+                        <div className="font-mono text-xs font-normal tabular-nums text-muted-foreground">
+                          最近测试：{TEST_STATUS_LABEL[c.lastTestStatus] || c.lastTestStatus}
+                          {c.lastTestErrorCode ? `（${c.lastTestErrorCode}）` : ''}
+                        </div>
+                      </td>
+                      {variant === 'media' ? (
+                        <td className="px-4 py-3 font-mono text-xs text-foreground">{pluginKey || '-'}</td>
+                      ) : (
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{c.adapter || '-'}</td>
+                      )}
+                      {variant === 'media' ? (
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                          <div>{c.providerId || '-'}</div>
+                          <div>{c.adapter || '-'}</div>
+                        </td>
+                      ) : (
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {linked.length > 0 ? (
+                            <span className="text-foreground">{linked.join('、')}</span>
+                          ) : (
+                            <span>未关联模型</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="px-4 py-3">
+                        <Badge tone={hasSecret ? 'success' : 'danger'}>{hasSecret ? '已配置密钥' : '未设置密钥'}</Badge>
+                      </td>
+                      {/* Immediate setting: `Switch` reverts itself when the PATCH rejects,
+                          and the failure message above surfaces the reason. */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={c.enabled}
+                            onCheckedChange={(enabled) => toggleMutation.mutateAsync({ id: c.id, enabled })}
+                            aria-label={`凭据 ${c.displayName} 启用状态`}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {c.enabled ? '已启用' : '已停用'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {testResult && testResult.id === c.id && (
+                            <span
+                              className={`text-xs ${testResult.success ? 'text-success' : 'text-danger'}`}
+                              role="status"
+                            >
+                              {testResult.msg}
+                            </span>
+                          )}
+                          {/* `loading` keeps the label and the measured idle width, so the
+                              row never reflows mid-test. */}
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={testingId === c.id}
+                            onClick={() => handleTest(c.id)}
+                            aria-label={`连通测试凭据 ${c.displayName}`}
+                          >
+                            连通测试
+                          </Button>
+                          <IconButton
+                            variant="danger-ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`确认删除凭据 ${c.displayName}？`)) {
+                                deleteMutation.mutate(c.id)
+                              }
+                            }}
+                            aria-label={`删除凭据 ${c.displayName}`}
+                            icon={<Trash2 aria-hidden="true" />}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              ) : (
+                <tr>
+                  <td colSpan={COLUMN_COUNT}>
+                    <EmptyState
+                      variant="first-use"
+                      density="compact"
+                      objectName={variant === 'media' ? '媒体凭据' : '语言模型凭据'}
+                      title={variant === 'media' ? '还没有媒体凭据' : '还没有语言模型凭据'}
+                      description={emptyText}
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   )
 }

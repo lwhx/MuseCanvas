@@ -27,6 +27,11 @@ export type WorkspaceNavItem =
       href: string
     }
 
+/** Route literals the header's account cluster points at. They live next to the
+ *  nav table so the header owns no loose paths of its own. */
+export const ACCOUNT_ROUTE = '/account'
+export const ADMIN_ROUTE = '/admin'
+
 export const workspaceNavItems: WorkspaceNavItem[] = [
   { key: 'image', kind: 'mode', mode: 'image', label: '作图', icon: ImageIcon },
   { key: 'video', kind: 'mode', mode: 'video', label: '生视频', icon: Video },

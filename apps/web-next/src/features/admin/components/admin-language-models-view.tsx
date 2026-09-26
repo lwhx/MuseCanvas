@@ -9,16 +9,41 @@ import { credentialsForPreset, isCustomCredential } from '../lib/provider-templa
 import { AdminCredentialTable } from './admin-credential-table'
 import { AdminProviderCredentialDialog } from './admin-provider-credential-dialog'
 import { AdminInstalledPlugins } from './admin-installed-plugins'
-import { Dialog } from '@/shared/components/ui/dialog'
-import { Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Plus, RefreshCw, Trash2 } from 'lucide-react'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  EmptyState,
+  FieldGroup,
+  FormField,
+  IconButton,
+  Input,
+  PageHeader,
+  Select,
+  SkeletonRow,
+  Switch,
+} from '@/shared/components/ui'
 
 const REASONING_EFFORT_OPTIONS: { value: ReasoningEffort; label: string }[] = [
-  { value: 'none', label: '不思考 (none)' },
-  { value: 'low', label: '低 (low)' },
-  { value: 'medium', label: '中 (medium)' },
-  { value: 'high', label: '高 (high)' },
-  { value: 'xhigh', label: '极高 (xhigh)' },
+  { value: 'none', label: '不思考（none）' },
+  { value: 'low', label: '低（low）' },
+  { value: 'medium', label: '中（medium）' },
+  { value: 'high', label: '高（high）' },
+  { value: 'xhigh', label: '极高（xhigh）' },
 ]
+
+const REASONING_EFFORT_LABEL: Record<string, string> = {
+  none: '不思考',
+  low: '低',
+  medium: '中',
+  high: '高',
+  xhigh: '极高',
+}
+
+const MODEL_COLUMN_COUNT = 7
 
 export function AdminLanguageModelsView() {
   const queryClient = useQueryClient()
@@ -33,6 +58,8 @@ export function AdminLanguageModelsView() {
   const {
     data: allModels = [],
     isLoading: modelsLoading,
+    isError: modelsError,
+    error: modelsQueryError,
     refetch: refetchModels,
   } = useQuery({
     queryKey: ['admin', 'models'],
@@ -53,6 +80,8 @@ export function AdminLanguageModelsView() {
   const {
     data: allCredentials = [],
     isLoading: credentialsLoading,
+    isError: credentialsError,
+    error: credentialsQueryError,
     refetch: refetchCredentials,
   } = useQuery({
     queryKey: ['admin', 'provider-credentials'],
@@ -155,145 +184,174 @@ export function AdminLanguageModelsView() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">语言模型</h1>
-          <p className="text-sm text-muted-foreground">配置语言模型与推理参数。</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-3 text-xs font-medium text-accent-contrast transition-colors hover:bg-accent-hover"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            添加语言模型
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              refetchModels()
-              refetchCredentials()
-            }}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
-          >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            刷新
-          </button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="语言模型"
+        description="配置语言模型与推理参数。"
+        actions={
+          <>
+            <Button onClick={openCreateModal} icon={<Plus aria-hidden="true" />}>
+              创建语言模型
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                refetchModels()
+                refetchCredentials()
+              }}
+              icon={<RefreshCw aria-hidden="true" className={modelsLoading ? 'motion-spin' : undefined} />}
+            >
+              刷新
+            </Button>
+          </>
+        }
+      />
 
-      <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface">
-        <table className="w-full text-left text-xs">
-          <thead className="border-b border-border bg-surface-subtle text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 font-medium">模型名称</th>
-              <th className="px-4 py-3 font-medium">协议</th>
-              <th className="px-4 py-3 font-medium">推理参数</th>
-              <th className="px-4 py-3 font-medium">关联凭据</th>
-              <th className="px-4 py-3 font-medium">并发上限</th>
-              <th className="px-4 py-3 font-medium">状态</th>
-              <th className="px-4 py-3 text-right font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {modelsLoading ? (
+      {deleteMutation.isError && (
+        <Alert tone="danger" role="alert" title="无法删除语言模型">
+          {deleteMutation.error?.message || '删除模型失败'}。请确认该模型未被提示词模板或任务引用后重试。
+        </Alert>
+      )}
+      {toggleMutation.isError && (
+        <Alert tone="danger" role="alert" title="无法更新模型状态">
+          {toggleMutation.error?.message || '更新状态失败'}。开关已恢复原状态，请稍后重试。
+        </Alert>
+      )}
+
+      <Card density="compact" className="gap-0 overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">语言模型列表</caption>
+            <thead className="bg-tonal text-muted-foreground">
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin" aria-hidden="true" />
-                  <span className="sr-only">正在加载语言模型</span>
-                </td>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">模型名称</th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">协议</th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">推理参数</th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">关联凭据</th>
+                <th scope="col" className="px-4 py-3 text-right text-sm font-medium">并发上限</th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">状态</th>
+                <th scope="col" className="px-4 py-3 text-right text-sm font-medium">操作</th>
               </tr>
-            ) : models.length > 0 ? (
-              models.map((m) => (
-                <tr key={m.id} className="hover:bg-surface-subtle/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    <div>{m.displayName}</div>
-                    <div className="font-mono text-[11px] text-muted-foreground">
-                      {m.vendorModelId || m.name || '-'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
-                    {m.languageProtocol || '-'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-0.5 font-mono text-[11px] text-muted-foreground">
-                      <div>输出上限 {m.maxOutputTokens ?? '-'}</div>
-                      <div>思考等级 {m.reasoningEffort || '-'}</div>
-                      <div>温度 {m.temperature ?? '-'}</div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {m.providerCredentialName ? (
-                      <span className="text-foreground">{m.providerCredentialName}</span>
-                    ) : (
-                      <span className="inline-flex items-center rounded bg-danger-soft px-2 py-0.5 text-[11px] font-medium text-danger">
-                        未关联凭据
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-mono">{m.concurrencyLimit}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => toggleMutation.mutate({ id: m.id, enabled: !m.enabled })}
-                      aria-label={m.enabled ? `停用语言模型 ${m.displayName}` : `启用语言模型 ${m.displayName}`}
-                      className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                        m.enabled
-                          ? 'bg-success-soft text-success hover:bg-success-soft/80'
-                          : 'bg-surface-subtle text-muted-foreground hover:bg-surface-subtle-strong'
-                      }`}
-                    >
-                      {m.enabled ? '已启用' : '已停用'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`确认删除语言模型 ${m.displayName}？`)) {
-                          deleteMutation.mutate(m.id)
-                        }
-                      }}
-                      aria-label={`删除语言模型 ${m.displayName}`}
-                      className="inline-flex items-center gap-1 rounded-[var(--radius-control)] border border-border p-1.5 text-danger hover:bg-danger-soft/20"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+            </thead>
+            <tbody className="divide-y divide-border" aria-busy={modelsLoading || undefined}>
+              {modelsLoading ? (
+                Array.from({ length: 3 }, (_, index) => (
+                  <tr key={index}>
+                    <td colSpan={MODEL_COLUMN_COUNT} className="px-4 py-2">
+                      <SkeletonRow cells={MODEL_COLUMN_COUNT} className="py-1.5" />
+                    </td>
+                  </tr>
+                ))
+              ) : modelsError ? (
+                <tr>
+                  <td colSpan={MODEL_COLUMN_COUNT}>
+                    <EmptyState
+                      variant="error"
+                      density="compact"
+                      objectName="语言模型"
+                      title="无法加载语言模型"
+                      description={`${modelsQueryError?.message || '加载模型列表时出现问题'}。请检查后端服务状态后重试。`}
+                      action={<Button variant="secondary" onClick={() => refetchModels()}>刷新重试</Button>}
+                    />
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  暂无语言模型配置
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : models.length > 0 ? (
+                models.map((m) => (
+                  <tr
+                    key={m.id}
+                    className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
+                  >
+                    <td className="px-4 py-3 font-medium text-foreground">
+                      <div>{m.displayName}</div>
+                      <div className="font-mono text-xs font-normal text-muted-foreground">
+                        {m.vendorModelId || m.name || '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                      {m.languageProtocol || '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                        <dt className="text-muted-foreground">输出上限</dt>
+                        <dd className="text-right font-mono tabular-nums">{m.maxOutputTokens ?? '-'}</dd>
+                        <dt className="text-muted-foreground">思考等级</dt>
+                        <dd className="text-right">
+                          {m.reasoningEffort ? (REASONING_EFFORT_LABEL[m.reasoningEffort] ?? m.reasoningEffort) : '-'}
+                        </dd>
+                        <dt className="text-muted-foreground">温度</dt>
+                        <dd className="text-right font-mono tabular-nums">{m.temperature ?? '-'}</dd>
+                      </dl>
+                    </td>
+                    <td className="px-4 py-3">
+                      {m.providerCredentialName ? (
+                        <span>{m.providerCredentialName}</span>
+                      ) : (
+                        <Badge tone="danger">未关联凭据</Badge>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono tabular-nums">{m.concurrencyLimit}</td>
+                    {/* Immediate setting: the Switch reverts itself when the PATCH rejects,
+                        and the banner above states the reason. */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={m.enabled}
+                          onCheckedChange={(enabled) => toggleMutation.mutateAsync({ id: m.id, enabled })}
+                          aria-label={`语言模型 ${m.displayName} 启用状态`}
+                        />
+                        <span className="text-xs text-muted-foreground">{m.enabled ? '已启用' : '已停用'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <IconButton
+                        variant="danger-ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm(`确认删除语言模型 ${m.displayName}？`)) {
+                            deleteMutation.mutate(m.id)
+                          }
+                        }}
+                        aria-label={`删除语言模型 ${m.displayName}`}
+                        icon={<Trash2 aria-hidden="true" />}
+                      />
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={MODEL_COLUMN_COUNT}>
+                    <EmptyState
+                      variant="first-use"
+                      density="compact"
+                      objectName="语言模型"
+                      title="还没有配置语言模型"
+                      description="在这里你可以创建、编辑和管理语言模型与推理参数。请先在下方创建凭据，再点击「创建语言模型」。"
+                      action={
+                        <Button onClick={openCreateModal}>创建第一个语言模型</Button>
+                      }
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-      <section className="space-y-3" aria-labelledby="language-credentials-heading">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 id="language-credentials-heading" className="text-sm font-semibold text-foreground">
+      <section className="flex flex-col gap-4" aria-labelledby="language-credentials-heading">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1 text-foreground">
+            <h2 id="language-credentials-heading" className="text-module">
               语言模型凭据
             </h2>
-            <p className="text-xs text-muted-foreground">
+            <p className="max-w-reading text-sm text-muted-foreground">
               语言模型绑定无插件身份的自定义凭据（适配协议 openai / anthropic + API Key）。图像与视频凭据由
               供应商插件签发，请在「媒体模型」页配置；历史遗留的自定义媒体凭据同样列在此处。
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setCredentialDialogOpen(true)}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-3 text-xs font-medium text-accent-contrast transition-colors hover:bg-accent-hover"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            添加凭据
-          </button>
+          <Button variant="secondary" onClick={() => setCredentialDialogOpen(true)} icon={<Plus aria-hidden="true" />}>
+            创建凭据
+          </Button>
         </div>
 
         <AdminCredentialTable
@@ -301,125 +359,118 @@ export function AdminLanguageModelsView() {
           isLoading={credentialsLoading}
           variant="language"
           linkedModels={linkedModelsByCredential}
-          emptyText="暂无语言模型凭据，请先添加凭据"
+          emptyText="在这里你可以创建、编辑和管理语言模型凭据。点击右上角「创建凭据」开始。"
+          error={credentialsError ? credentialsQueryError?.message || '加载凭据列表失败' : null}
+          onRetry={() => refetchCredentials()}
         />
       </section>
 
       <AdminInstalledPlugins kind="language" />
 
-      <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="添加新语言模型" panelClassName="max-w-md">
-        <div className="mt-4 space-y-4">
+      <Dialog
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        title="创建新语言模型"
+        panelClassName="max-w-form"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setCreateModalOpen(false)}>
+              取消
+            </Button>
+            <Button
+              loading={createMutation.isPending}
+              disabled={!selectedPresetId || selectedCredentialMissing}
+              onClick={() => createMutation.mutate()}
+            >
+              创建模型
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-6">
           {actionError && (
-            <div className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
-              {actionError}
-            </div>
+            <Alert tone="danger" role="alert" title="无法创建语言模型">
+              {actionError}。请选择预设并关联可用凭据后重试。
+            </Alert>
           )}
 
-          <div className="space-y-3">
-              <div>
-                <label htmlFor="language-model-preset" className="mb-1 block text-xs font-medium text-foreground">
-                  选择语言模型预设
-                </label>
-                <select
-                  id="language-model-preset"
-                  value={selectedPresetId}
-                  onChange={(e) => pickPreset(e.target.value)}
-                  className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-                >
-                  <option value="">请选择预设</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.displayName} ({p.vendorModelId})
-                    </option>
-                  ))}
-                </select>
-                {presets.length === 0 && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">当前没有可用的语言模型预设。</p>
-                )}
-              </div>
+          <FieldGroup>
+            <FormField
+              label="选择语言模型预设"
+              required
+              hint={presets.length === 0 ? '当前没有可用的语言模型预设。' : '预设由服务端注册，决定输出上限与温度。'}
+            >
+              <Select value={selectedPresetId} onChange={(e) => pickPreset(e.target.value)}>
+                <option value="">请选择预设</option>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName} ({p.vendorModelId})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
 
-              <div>
-                <label htmlFor="language-model-credential" className="mb-1 block text-xs font-medium text-foreground">
-                  关联供应商凭据（必填）
-                </label>
-                <select
-                  id="language-model-credential"
-                  value={selectedCredentialId}
-                  onChange={(e) => setSelectedCredentialId(e.target.value)}
-                  disabled={!selectedPreset}
-                  className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none disabled:opacity-60"
-                >
-                  <option value="">{selectedPreset ? '请选择凭据' : '请先选择预设'}</option>
-                  {matchingCredentials.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.displayName} ({c.providerId || c.adapter})
-                    </option>
-                  ))}
-                </select>
-                {selectedPreset && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+            <FormField
+              label="关联供应商凭据"
+              required
+              hint={
+                selectedPreset ? (
+                  <>
                     按适配协议 <span className="font-mono text-foreground">{selectedPreset.adapter || '-'}</span> 匹配凭据
-                    {matchingCredentials.length === 0 && '，当前无可用凭据，请在下方「语言模型凭据」区新建'}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="language-model-reasoning" className="mb-1 block text-xs font-medium text-foreground">
-                  思考等级
-                </label>
-                <select
-                  id="language-model-reasoning"
-                  value={reasoningEffort}
-                  onChange={(e) => setReasoningEffort(e.target.value as ReasoningEffort)}
-                  className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-                >
-                  {REASONING_EFFORT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  预设默认值：{selectedPreset?.reasoningEffort || 'medium'}；输出上限与温度由预设决定。
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="language-model-concurrency" className="mb-1 block text-xs font-medium text-foreground">
-                  并发执行限制
-                </label>
-                <input
-                  id="language-model-concurrency"
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={concurrencyLimit}
-                  onChange={(e) => setConcurrencyLimit(parseInt(e.target.value, 10) || 1)}
-                  className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setCreateModalOpen(false)}
-                className="rounded-[var(--radius-control)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-subtle"
+                    {matchingCredentials.length === 0 ? '，当前无可用凭据，请在下方「语言模型凭据」区创建凭据' : ''}
+                  </>
+                ) : undefined
+              }
+            >
+              <Select
+                value={selectedCredentialId}
+                onChange={(e) => setSelectedCredentialId(e.target.value)}
+                disabled={!selectedPreset}
               >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending || !selectedPresetId || selectedCredentialMissing}
-                className="flex items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-4 py-1.5 text-xs font-medium text-accent-contrast hover:bg-accent-hover disabled:opacity-50"
+                <option value="">{selectedPreset ? '请选择凭据' : '请先选择预设'}</option>
+                {matchingCredentials.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.displayName} ({c.providerId || c.adapter})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+
+            <FormField
+              label="思考等级"
+              hint={
+                <>
+                  预设默认值：
+                  {selectedPreset?.reasoningEffort
+                    ? REASONING_EFFORT_LABEL[selectedPreset.reasoningEffort] ?? selectedPreset.reasoningEffort
+                    : 'medium'}
+                  ；输出上限与温度由预设决定。
+                </>
+              }
+            >
+              <Select
+                value={reasoningEffort}
+                onChange={(e) => setReasoningEffort(e.target.value as ReasoningEffort)}
               >
-                {createMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-                创建模型
-              </button>
-            </div>
-          </div>
+                {REASONING_EFFORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+
+            <FormField label="并发执行限制" hint="同时运行的该模型任务数量上限，取值范围 1–50。">
+              <Input
+                type="number"
+                min="1"
+                max="50"
+                value={concurrencyLimit}
+                onChange={(e) => setConcurrencyLimit(parseInt(e.target.value, 10) || 1)}
+              />
+            </FormField>
+          </FieldGroup>
+        </div>
       </Dialog>
 
       <AdminProviderCredentialDialog

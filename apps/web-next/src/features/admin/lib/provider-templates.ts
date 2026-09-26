@@ -19,7 +19,7 @@ export const LEGACY_ADAPTER_OPTIONS: Record<
 > = {
   media: [
     { value: 'openai', label: 'OpenAI 兼容' },
-    { value: 'seedream', label: 'Seedream (火山引擎)' },
+    { value: 'seedream', label: 'Seedream（火山引擎）' },
   ],
   language: [
     { value: 'openai', label: 'OpenAI 兼容' },

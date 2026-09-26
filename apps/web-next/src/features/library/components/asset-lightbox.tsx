@@ -12,6 +12,7 @@ import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import { maskCapabilityBlockReason, modelAcceptsMask, resolveActiveImageModel } from '@/shared/lib/model-capabilities'
 import { assetPlaybackUrl, isVideoAsset } from '@/shared/types'
 import type { Asset } from '@/shared/types'
+import { Button, IconButton, buttonVariants } from '@/shared/components/ui'
 
 export interface AssetLightboxProps {
   /** The currently filtered grid, in display order — this list *is* the
@@ -25,9 +26,36 @@ export interface AssetLightboxProps {
   onSelect: (assetId: string) => void
 }
 
-/** Full-size preview over the library grid. All modal behaviour (mount
- *  lifecycle, portal, focus trap, scroll lock, Escape / arrow keys) comes from
- *  `useDialog`; this file only decides what the panel shows. */
+/** `YYYY-MM-DD HH:mm` (copy.md §9): the spec's date format, and 24-hour time. */
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/**
+ * The scrim, identical to `Dialog`'s: `--color-overlay` at `--opacity-overlay`
+ * (40% light, 55% dark) via `color-mix` rather than an `opacity` utility, because
+ * the entrance/exit animation animates `opacity` and would otherwise fight the
+ * token. `--opacity-overlay` is documented in `globals.css` as the scrim *and media
+ * backdrop* value, which is exactly what this surface is.
+ */
+const SCRIM_BACKGROUND = 'color-mix(in srgb, var(--color-overlay) calc(var(--opacity-overlay) * 100%), transparent)'
+
+/**
+ * Full-size preview over the library grid. All modal behaviour (mount lifecycle,
+ * portal, focus trap, scroll lock, Escape, ← / → navigation, inert background and
+ * focus restore to the triggering tile) comes from `useDialog`; this file only
+ * decides what the panel shows.
+ *
+ * It is deliberately *not* routed through `Dialog`: the arrows belong outside the
+ * panel, on the media edge (`Image/Attachment Preview` → lightbox 全屏), and `Dialog`
+ * wraps its children in a padded scroll body with a fixed header row, so neither the
+ * full-bleed media nor those out-of-panel controls fit it. What it does share with
+ * `Dialog` is the surface contract — `z-modal`, `shadow-modal`, `rounded-panel`, the
+ * same scrim token and the same enter/exit motion pair.
+ */
 export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: AssetLightboxProps) {
   const index = activeAssetId ? assets.findIndex((asset) => asset.id === activeAssetId) : -1
   const current = index >= 0 ? assets[index] : null
@@ -92,7 +120,8 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
-      className={`fixed inset-0 z-[var(--z-index-overlay)] flex items-center justify-center bg-overlay/80 p-4 ${
+      style={{ backgroundColor: SCRIM_BACKGROUND }}
+      className={`fixed inset-0 z-modal flex items-center justify-center p-4 ${
         closing ? 'motion-fade-out pointer-events-none' : 'motion-fade-in'
       }`}
     >
@@ -100,22 +129,22 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
         第 {Math.max(index + 1, 1)} / {assets.length} 个作品
       </p>
 
-      <button
-        type="button"
+      <IconButton
+        variant="ghost"
+        size="lg"
         ref={closeButtonRef}
         onClick={onClose}
         aria-label="关闭预览"
-        className="absolute right-4 top-4 rounded-full bg-overlay/40 p-2 text-foreground-inverse transition-colors hover:bg-overlay/60"
-      >
-        <X className="h-6 w-6" />
-      </button>
+        className="absolute right-4 top-4 rounded-pill bg-overlay/60 text-foreground-inverse enabled:hover:bg-overlay"
+        icon={<X aria-hidden="true" />}
+      />
 
       <NavButton direction="previous" disabled={isFirst} onNavigate={onNavigate} />
       <NavButton direction="next" disabled={isLast} onNavigate={onNavigate} />
 
       <div
         {...dialogProps}
-        className={`max-h-[90vh] max-w-4xl overflow-hidden rounded-[var(--radius-card)] bg-surface shadow-lg ${
+        className={`max-h-[90vh] w-full max-w-content overflow-hidden rounded-panel bg-surface shadow-modal ${
           closing ? 'motion-dialog-out' : 'motion-dialog-in'
         }`}
       >
@@ -130,34 +159,39 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
             width={shown.width}
             height={shown.height}
             hasAudio={shown.hasAudio}
-            className={isVideo ? 'max-h-[75vh] w-full object-contain' : 'max-h-[75vh] w-auto object-contain'}
+            className={isVideo ? 'max-h-[75vh] w-full object-contain' : 'mx-auto max-h-[75vh] w-auto object-contain'}
           />
         </div>
-        <div className="p-4">
-          <p id={labelId} className="text-xs font-medium text-foreground">
+        {/* A dialog is a card-class surface: heading, meta and actions are separated
+            by whitespace only, never a rule. */}
+        <div className="flex flex-col gap-3 p-6">
+          <p id={labelId} className="text-module">
             {shown.prompt}
           </p>
-          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>{new Date(shown.createdAt).toLocaleString()}</span>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+              {formatDateTime(shown.createdAt)}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Crop aria-hidden="true" />}
                 onClick={() => startRegionEdit(shown)}
                 disabled={Boolean(regionEditBlocked)}
                 title={regionEditBlocked ?? '到创作台框选要修改的区域'}
-                className="flex items-center gap-1 text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:no-underline"
               >
-                <Crop className="h-3.5 w-3.5" aria-hidden="true" />
                 局部修改
-              </button>
+              </Button>
               <a
                 href={assetPlaybackUrl(shown)}
                 download
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 text-accent hover:underline"
+                aria-label="下载该作品"
+                className={buttonVariants({ variant: 'ghost', size: 'sm' })}
               >
-                <Download className="h-3.5 w-3.5" />
+                <Download aria-hidden="true" />
                 下载
               </a>
             </div>
@@ -176,21 +210,22 @@ interface NavButtonProps {
 }
 
 /** Edge arrows. The boundary ones stay out of the tab ring because `useDialog`
- *  skips `[disabled]` when it collects the focusable set. */
+ *  skips `[disabled]` when it collects the focusable set, and they wear the one
+ *  disabled treatment the token layer defines instead of a hand-picked opacity. */
 function NavButton({ direction, disabled, onNavigate }: NavButtonProps) {
   const previous = direction === 'previous'
   const Icon = previous ? ChevronLeft : ChevronRight
   return (
-    <button
-      type="button"
+    <IconButton
+      variant="ghost"
+      size="lg"
       onClick={() => onNavigate(direction)}
       disabled={disabled}
       aria-label={previous ? '上一个作品' : '下一个作品'}
-      className={`absolute top-1/2 -translate-y-1/2 rounded-full bg-overlay/40 p-2 text-foreground-inverse transition-colors hover:bg-overlay/60 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-overlay/40 ${
+      className={`absolute top-1/2 -translate-y-1/2 rounded-pill bg-overlay/60 text-foreground-inverse enabled:hover:bg-overlay ${
         previous ? 'left-4' : 'right-4'
       }`}
-    >
-      <Icon className="h-6 w-6" />
-    </button>
+      icon={<Icon aria-hidden="true" />}
+    />
   )
 }

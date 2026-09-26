@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import type {
@@ -10,8 +10,21 @@ import type {
   PluginKind,
 } from '@/shared/types'
 import { PLUGIN_ARTIFACT_MAX_BYTES, humanFileSize, postPluginPackage, shortDigest } from '../lib/plugin-upload'
-import { Loader2, ShieldAlert, Upload } from 'lucide-react'
-import { Dialog } from '@/shared/components/ui/dialog'
+import { ShieldAlert } from 'lucide-react'
+import {
+  Alert,
+  Badge,
+  Button,
+  Dialog,
+  FileDropZone,
+  FormField,
+  Spinner,
+  Textarea,
+} from '@/shared/components/ui'
+import type { DropZoneFile } from '@/shared/components/ui'
+
+/** The drop zone holds at most one artifact; a stable id keeps its row keyed. */
+const ARTIFACT_FILE_ID = 'plugin-artifact'
 
 /**
  * Manifest prefills. Field names follow `validatePluginManifest` in
@@ -75,22 +88,25 @@ interface AdminPluginUploadDialogProps {
   onInstalled?: (plugin: { pluginId: string; pluginVersion: string }) => void
 }
 
+/** One scan finding: severity as text + Badge, never colour alone. */
 function FindingList({ findings }: { findings: AdminPluginScanFinding[] }) {
   if (findings.length === 0) return null
   return (
-    <ul className="space-y-1">
+    <ul className="flex flex-col gap-2">
       {findings.map((f, i) => (
         <li
           key={`${f.rule}-${f.line ?? 'x'}-${i}`}
-          className={`rounded border px-2 py-1.5 text-[11px] ${
-            f.severity === 'error' ? 'border-danger-soft bg-danger-soft/20 text-danger' : 'border-border bg-surface-subtle text-muted-foreground'
+          className={`flex flex-wrap items-start gap-2 rounded-control p-2 text-xs ${
+            f.severity === 'error' ? 'bg-danger-soft text-danger' : 'bg-tonal text-muted-foreground'
           }`}
         >
           {/* 严重级别以文字呈现，不依赖颜色区分 */}
-          <span className="font-semibold">{f.severity === 'error' ? '错误' : '警告'}</span>
-          <span className="ml-1 font-mono">{f.rule}</span>
-          {typeof f.line === 'number' && <span className="ml-1 font-mono">第 {f.line} 行</span>}
-          <span className="ml-1">{f.message}</span>
+          <Badge tone={f.severity === 'error' ? 'danger' : 'warning'} className="shrink-0">
+            {f.severity === 'error' ? '错误' : '警告'}
+          </Badge>
+          <span className="font-mono">{f.rule}</span>
+          {typeof f.line === 'number' && <span className="font-mono tabular-nums">第 {f.line} 行</span>}
+          <span>{f.message}</span>
         </li>
       ))}
     </ul>
@@ -102,13 +118,11 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
   const [file, setFile] = useState<File | null>(null)
   const [manifestText, setManifestText] = useState(MANIFEST_TEMPLATES[kind])
   const [validate, setValidate] = useState<ValidateState>(IDLE)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const resetFields = () => {
     setFile(null)
     setManifestText(MANIFEST_TEMPLATES[kind])
     setValidate(IDLE)
-    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const close = () => {
@@ -206,149 +220,137 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
     !blockingFindings &&
     !installMutation.isPending
 
+  // One selected artifact, mirrored into the shared drop zone's file row. No byte
+  // progress is available from `postPluginPackage`, so no percentage is claimed:
+  // the install button carries the busy state instead.
+  const artifactFiles: DropZoneFile[] = file
+    ? [{ id: ARTIFACT_FILE_ID, name: file.name, size: file.size }]
+    : []
+
   return (
-    <Dialog open={open} onClose={close} title={`上传${kind === 'media' ? '媒体' : '语言'}插件`} panelClassName="max-w-lg">
-      <div className="mt-4 space-y-4">
+    <Dialog
+      open={open}
+      onClose={close}
+      title={`上传${kind === 'media' ? '媒体' : '语言'}插件`}
+      panelClassName="max-w-dialog-wide"
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            取消
+          </Button>
+          <Button
+            loading={installMutation.isPending}
+            disabled={!canSubmit}
+            onClick={() => file && installMutation.mutate({ file, manifest: manifestText })}
+          >
+            安装插件
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-6">
         {/* Risk disclosure — deliberately first-class content, not fine print. */}
-        <div className="rounded-[var(--radius-control)] border border-danger-soft bg-danger-soft/20 p-3 text-xs text-foreground space-y-2">
-          <div className="flex items-center gap-1.5 font-semibold text-danger">
-            <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
-            上传前必读
+        <Alert
+          tone="danger"
+          icon={<ShieldAlert aria-hidden="true" />}
+          title="上传前必读"
+        >
+          <div className="flex flex-col gap-2">
+            <p>
+              上传的插件代码会由 Worker 进程<strong>以该进程的全部权限直接执行</strong>（可读写任务数据、访问已配置的供应商凭据与网络）。
+              仅允许受信任的管理员上传，请勿加载任何来源不明的 <code className="font-mono">.mjs</code> 文件。
+            </p>
+            <p>
+              <strong>同版本不可覆盖，升级版本号后重新上传</strong>：插件以 <code className="font-mono">pluginId@pluginVersion</code>{' '}
+              为一次性写入身份，Worker 的注册表与模块缓存都以该身份为键，同版本热替换不会生效，服务端会直接拒绝（PLUGIN_VERSION_IMMUTABLE）。
+            </p>
           </div>
-          <p>
-            上传的插件代码会由 Worker 进程<strong>以该进程的全部权限直接执行</strong>（可读写任务数据、访问已配置的供应商凭据与网络）。
-            仅允许受信任的管理员上传，请勿加载任何来源不明的 <code className="font-mono">.mjs</code> 文件。
-          </p>
-          <p>
-            <strong>同版本不可覆盖，升级版本号后重新上传</strong>：插件以 <code className="font-mono">pluginId@pluginVersion</code>{' '}
-            为一次性写入身份，Worker 的注册表与模块缓存都以该身份为键，同版本热替换不会生效，服务端会直接拒绝（PLUGIN_VERSION_IMMUTABLE）。
-          </p>
-        </div>
+        </Alert>
 
-        <div>
-          <label htmlFor="plugin-upload-file" className="mb-1 block text-xs font-medium text-foreground">
-            插件包文件
-          </label>
-          <input
-            ref={fileInputRef}
-            id="plugin-upload-file"
-            type="file"
-            accept=".mjs,application/javascript,text/javascript"
-            className="sr-only"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
-            >
-              <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-              选择 .mjs 文件
-            </button>
-            {file ? (
-              <span className="font-mono text-[11px] text-muted-foreground">
-                {file.name}（{humanFileSize(file.size)}）
-              </span>
-            ) : (
-              <span className="text-[11px] text-muted-foreground">未选择文件</span>
-            )}
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            单个 .mjs 文件，大小上限 5&nbsp;MB（{PLUGIN_ARTIFACT_MAX_BYTES.toLocaleString('en-US')} 字节，以服务端强制为准）。
-          </p>
-        </div>
+        <FileDropZone
+          files={artifactFiles}
+          onFilesSelected={(files) => setFile(files[0] ?? null)}
+          onRemove={() => setFile(null)}
+          accept=".mjs,application/javascript,text/javascript"
+          maxFileSize={PLUGIN_ARTIFACT_MAX_BYTES}
+          maxFiles={1}
+          label="拖拽 .mjs 插件包到此处，或点击选择文件"
+          hint={`单个 .mjs 文件，大小上限 5 MB（${PLUGIN_ARTIFACT_MAX_BYTES.toLocaleString('en-US')} 字节），以服务端强制为准。`}
+        />
 
-        <div>
-          <label htmlFor="plugin-upload-manifest" className="mb-1 block text-xs font-medium text-foreground">
-            插件清单 manifest（JSON）
-          </label>
-          <textarea
-            id="plugin-upload-manifest"
+        <FormField
+          label="插件清单 manifest（JSON）"
+          required
+          hint="manifest 的 id / version 必须与插件包内注册的插件一致；字段规则由服务端校验。"
+        >
+          <Textarea
             value={manifestText}
             onChange={(e) => setManifestText(e.target.value)}
             rows={10}
             spellCheck={false}
-            className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 font-mono text-xs text-foreground outline-none"
+            className="font-mono text-xs"
           />
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            manifest 的 id / version 必须与插件包内注册的插件一致；字段规则由服务端校验。
-          </p>
-        </div>
+        </FormField>
 
         {/* aria-live region: pre-flight verdict + findings update without a click. */}
-        <div aria-live="polite" role="status" className="space-y-2">
+        <div aria-live="polite" role="status" className="flex flex-col gap-2">
           {validate.phase === 'checking' && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner label="正在校验" />
               正在服务端扫描插件包与清单（不落库）…
-            </div>
+            </p>
           )}
           {validate.phase === 'error' && (
-            <div className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
-              {validate.message}
-            </div>
+            <Alert tone="danger" role="alert" title="无法完成预检">
+              {validate.message}。请更换插件包文件或修正清单内容后重试。
+            </Alert>
           )}
           {validate.phase === 'rejected' && (
-            <div className="space-y-1.5" role="alert">
-              <div className="text-xs font-medium text-danger">{validate.message}（修正后请调整文件或清单）</div>
+            <div className="flex flex-col gap-2">
+              <Alert tone="danger" role="alert" title="服务端拒绝该插件包">
+                {validate.message}。请按下列发现修正文件或清单后，以新的版本号重新上传。
+              </Alert>
               <FindingList findings={validate.findings} />
             </div>
           )}
           {validate.phase === 'ready' && validate.summary && (
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium text-success">校验通过，可提交安装。</div>
-              <div className="rounded-[var(--radius-control)] bg-surface-subtle p-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-col gap-2">
+              <Alert tone="success" title="校验通过">
+                插件包与清单已通过服务端扫描，可以安装插件。
+              </Alert>
+              <div className="flex flex-col gap-1 rounded-control bg-tonal p-3 text-xs text-muted-foreground">
                 <span className="font-mono text-foreground">
                   {validate.summary.pluginId}@{validate.summary.pluginVersion}
                 </span>
-                {' · '}
-                {validate.summary.displayName} · {validate.summary.modelIds.length} 个模型 · 制品 sha256{' '}
-                <span className="font-mono text-foreground" title={validate.summary.artifactDigest}>
-                  {shortDigest(validate.summary.artifactDigest)}
+                <span>
+                  {validate.summary.displayName} · {validate.summary.modelIds.length} 个模型 · 制品 sha256{' '}
+                  <span className="font-mono text-foreground" title={validate.summary.artifactDigest}>
+                    {shortDigest(validate.summary.artifactDigest)}
+                  </span>{' '}
+                  · {humanFileSize(validate.summary.artifactSizeBytes)}
                 </span>
-                {' · '}
-                {humanFileSize(validate.summary.artifactSizeBytes)}
               </div>
               {validate.summary.warnings.length > 0 && (
-                <div className="text-[11px] text-muted-foreground">
-                  <div className="mb-1 font-medium">警告（不阻断安装，但请确认符合预期）：</div>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-muted-foreground">警告（不阻断安装，但请确认符合预期）：</p>
                   <FindingList findings={validate.summary.warnings} />
                 </div>
               )}
             </div>
           )}
           {validate.phase === 'idle' && (
-            <div className="text-[11px] text-muted-foreground">选择插件包文件后将自动进行服务端预检。</div>
+            <p className="text-xs text-muted-foreground">选择插件包文件后将自动进行服务端预检。</p>
           )}
         </div>
 
         {blockingFindings && (
-          <div className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
-            存在错误级别的扫描发现，已禁止提交安装。
-          </div>
+          <Alert tone="danger" role="alert" title="无法安装插件">
+            存在错误级别的扫描发现，安装已被阻止。请按下列发现修正插件包后重新上传。
+          </Alert>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-[var(--radius-control)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-subtle"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() => file && installMutation.mutate({ file, manifest: manifestText })}
-            disabled={!canSubmit}
-            className="flex items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-4 py-1.5 text-xs font-medium text-accent-contrast hover:bg-accent-hover disabled:opacity-50"
-          >
-            {installMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-            提交安装
-          </button>
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          提交成功后插件状态为「待加载」：需等待 Worker 拉取制品、核验 sha256 并重新扫描通过后才会启用，安装完成不代表即时生效。
+        <p className="text-xs text-muted-foreground">
+          安装成功后插件状态为「待加载」：需等待 Worker 拉取制品、核验 sha256 并重新扫描通过后才会启用，安装完成不代表即时生效。
         </p>
       </div>
     </Dialog>

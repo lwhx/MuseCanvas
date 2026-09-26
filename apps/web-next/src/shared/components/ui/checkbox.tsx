@@ -1,63 +1,118 @@
 'use client'
 
-import { useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
+import type { ReactNode } from 'react'
+import { cn } from '@/shared/lib/cn'
 
-interface CheckboxProps {
+export interface CheckboxProps {
   checked: boolean
   onCheckedChange: (checked: boolean) => void
-  /** Visible clickable text. Omit for a standalone box (icon tiles, table rows). */
-  label?: string
+  /** Visible clickable text. Omit for a standalone circle (icon tiles, table rows). */
+  label?: ReactNode
   'aria-label'?: string
   disabled?: boolean
+  /** Half-selected parent (a "select all" header over a partial batch).
+   *  Renders a centered horizontal dash (-) per Jude-Frontweb v22. */
+  indeterminate?: boolean
+  className?: string
+  id?: string
+  name?: string
+  value?: string
 }
 
 /**
- * Native input (keyboard, autofill, form semantics) restyled to the system:
- * 5px checkbox radius, control-border outline, ink fill when checked. The
- * input stays focusable and screen-reader-visible — the styled box is a
- * sibling, not a replacement.
+ * Jude-Frontweb v22 Circular Checkbox:
+ * - 16px circular outline (`h-4 w-4 rounded-full`).
+ * - Unchecked: `bg-surface border border-border-control`, hover deepens border to foreground.
+ * - Checked: Solid filled circle (●, `bg-primary border-primary`, no checkmark ✓, no hollow center).
+ * - Indeterminate: Centered horizontal dash (-) in `bg-on-primary`.
+ * - Hit target: 40px (`--control-md`) via comfortable label padding.
+ * - Native keyboard accessibility: Space to toggle, focus-visible outline on keyboard focus.
  */
-export function Checkbox({ checked, onCheckedChange, label, disabled, ...aria }: CheckboxProps) {
-  const id = useId()
-  const box = (
-    <>
-      <input
-        id={label ? id : undefined}
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onCheckedChange(event.target.checked)}
-        aria-label={label ? undefined : aria['aria-label']}
-        className="peer sr-only"
-      />
-      <span
-        aria-hidden="true"
-        className={`inline-flex h-4 w-4 items-center justify-center rounded-checkbox border transition-colors motion-hover-fade peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary ${
-          checked
-            ? 'border-primary bg-primary'
-            : 'border-border-control bg-surface hover:border-foreground'
-        } ${disabled ? 'opacity-50' : ''}`}
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 256 256"
-          fill="none"
-          className={`text-foreground-inverse transition-opacity ${checked ? 'opacity-100' : 'opacity-0'}`}
-        >
-          <path d="M48 136l48 48 112-112" stroke="currentColor" strokeWidth="28" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-    </>
+export function Checkbox({
+  checked,
+  onCheckedChange,
+  label,
+  disabled = false,
+  indeterminate = false,
+  className,
+  id: customId,
+  'aria-label': ariaLabel,
+  name,
+  value,
+  ...rest
+}: CheckboxProps) {
+  const generatedId = useId()
+  const id = customId ?? (label ? generatedId : undefined)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = Boolean(indeterminate)
+    }
+  }, [indeterminate])
+
+  const visualCircle = (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+        'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-border-focus',
+        indeterminate || checked
+          ? 'border-primary bg-primary text-on-primary'
+          : cn('border-border-control bg-surface', !disabled && 'group-hover:border-foreground peer-hover:border-foreground'),
+      )}
+    >
+      {indeterminate ? (
+        <span className="h-[2px] w-2 rounded-full bg-on-primary" />
+      ) : null}
+    </span>
+  )
+
+  const nativeInput = (
+    <input
+      ref={inputRef}
+      id={id}
+      type="checkbox"
+      name={name}
+      value={value}
+      checked={checked}
+      disabled={disabled}
+      aria-label={label ? undefined : ariaLabel}
+      onChange={(event) => onCheckedChange(event.target.checked)}
+      className="sr-only peer"
+      {...rest}
+    />
   )
 
   if (!label) {
-    return <span className="inline-flex">{box}</span>
+    return (
+      <label
+        htmlFor={id}
+        className={cn(
+          'group inline-flex h-[var(--control-md)] w-[var(--control-md)] select-none items-center justify-center rounded-control',
+          disabled ? 'is-disabled' : 'cursor-pointer',
+          className,
+        )}
+      >
+        {nativeInput}
+        {visualCircle}
+      </label>
+    )
   }
+
   return (
-    <label htmlFor={id} className={`inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm leading-[1.5] text-foreground ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
-      {box}
-      {label}
+    <label
+      htmlFor={id}
+      className={cn(
+        'group inline-flex min-h-[var(--control-md)] select-none items-center gap-2.5 text-sm text-foreground',
+        disabled ? 'is-disabled' : 'cursor-pointer',
+        className,
+      )}
+    >
+      {nativeInput}
+      {visualCircle}
+      <span>{label}</span>
     </label>
   )
 }

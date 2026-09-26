@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Switch } from '@/shared/components/ui/switch'
+import { Button, Input, SegmentedControl, Select } from '@/shared/components/ui'
+import { cn } from '@/shared/lib/cn'
 import {
   descriptorLabel,
   descriptorOptions,
@@ -35,23 +37,8 @@ export interface MediaParameterControlsProps {
   countUnit?: string
 }
 
-/** Past this many options a pill row stops fitting the control bar. */
+/** Past this many options a segmented row stops fitting the control bar. */
 const SEGMENTED_MAX_OPTIONS = 6
-
-const SELECT_CLASS =
-  'rounded-[var(--radius-control)] border border-border bg-surface-subtle px-2.5 py-1.5 text-xs font-medium text-foreground outline-none hover:bg-surface-subtle-strong'
-const PILL_GROUP_CLASS = 'flex rounded-[var(--radius-control)] border border-border bg-surface-subtle p-0.5'
-const PILL_CLASS =
-  'flex items-center gap-1 rounded-[calc(var(--radius-control)-2px)] px-2 py-1 text-xs font-medium transition-colors'
-const PILL_SELECTED_CLASS = 'bg-surface text-foreground shadow-sm'
-const PILL_IDLE_CLASS = 'text-muted-foreground hover:text-foreground'
-const INPUT_CLASS =
-  'w-20 rounded-[var(--radius-control)] border border-border bg-surface px-2 py-1 text-xs text-foreground outline-none'
-
-/** Native selects and inputs only ever yield strings, so compare in string space. */
-function isSameValue(optionValue: ParameterValue, value: ParameterValue | undefined) {
-  return value !== undefined && String(optionValue) === String(value)
-}
 
 /**
  * Stable DOM id for a control's visible label.
@@ -71,6 +58,7 @@ export function MediaParameterControls({ model, values, onChange, countUnit }: M
   const advancedControls = controls.filter((descriptor) => isAdvancedParameter(descriptor))
   const primaryControls = controls.filter((descriptor) => !isAdvancedParameter(descriptor))
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const advancedGroupId = useId()
 
   const countDescriptor = resolveDescriptor(model, 'count')
   const countOptions = descriptorOptions(countDescriptor)
@@ -128,23 +116,24 @@ export function MediaParameterControls({ model, values, onChange, countUnit }: M
     if (descriptor.ui?.control === 'select' || options.length > SEGMENTED_MAX_OPTIONS) {
       const value = effectiveValue(model, descriptor, values)
       return (
-        <select
+        <Select
+          size="sm"
+          width="content"
           aria-labelledby={labelId(descriptor)}
           value={value === undefined ? '' : String(value)}
           onChange={(event) => pick(descriptor, event.target.value)}
-          className={SELECT_CLASS}
         >
           {options.map((option) => (
             <option key={String(option.value)} value={String(option.value)}>
               {`${option.label}${unit}${option.isDefault ? ' · 默认' : ''}`}
             </option>
           ))}
-        </select>
+        </Select>
       )
     }
 
     return (
-      <ValuePills
+      <ValueSegments
         descriptor={descriptor}
         model={model}
         options={options}
@@ -169,7 +158,7 @@ export function MediaParameterControls({ model, values, onChange, countUnit }: M
 
       {countDescriptor && countOptions.length > 0 && (
         <ParameterField descriptor={countDescriptor} model={model}>
-          <ValuePills
+          <ValueSegments
             descriptor={countDescriptor}
             model={model}
             options={countOptions}
@@ -181,29 +170,38 @@ export function MediaParameterControls({ model, values, onChange, countUnit }: M
       )}
 
       {advancedControls.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <button
+        <div className="flex flex-col gap-2">
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             aria-expanded={advancedOpen}
+            aria-controls={advancedGroupId}
             onClick={() => setAdvancedOpen((open) => !open)}
-            className="flex items-center gap-1 px-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+            className="w-fit px-2 text-xs text-muted-foreground"
+            icon={
+              <ChevronDown
+                aria-hidden="true"
+                className={cn('h-[var(--icon-xs)] w-[var(--icon-xs)] transition-transform motion-position', advancedOpen && 'rotate-180')}
+              />
+            }
           >
-            <ChevronDown
-              aria-hidden="true"
-              className={`h-3 w-3 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
-            />
             更多参数
-          </button>
-          {advancedOpen && advancedControls.map((descriptor) => (
-            <ParameterField
-              key={descriptor.name}
-              descriptor={descriptor}
-              model={model}
-              as="div"
-            >
-              {renderControl(descriptor)}
-            </ParameterField>
-          ))}
+          </Button>
+          {advancedOpen && (
+            <div id={advancedGroupId} className="flex flex-wrap items-end gap-2">
+              {advancedControls.map((descriptor) => (
+                <ParameterField
+                  key={descriptor.name}
+                  descriptor={descriptor}
+                  model={model}
+                  as="div"
+                >
+                  {renderControl(descriptor)}
+                </ParameterField>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </>
@@ -225,12 +223,12 @@ function ParameterField({
   const label = descriptorLabel(descriptor, model)
   return (
     <Tag className="flex flex-col gap-1">
-      <span id={labelId(descriptor)} className="px-0.5 text-[11px] font-medium text-muted-foreground">
+      <span id={labelId(descriptor)} className="px-0.5 text-overline text-muted-foreground">
         {label}
       </span>
       {children}
       {descriptor.description && (
-        <span className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
+        <span className="px-0.5 text-xs leading-relaxed text-muted-foreground">
           {descriptor.description}
         </span>
       )}
@@ -251,33 +249,35 @@ function SliderControl({
     ? { min: descriptor.min ?? 0, max: descriptor.max ?? 100, step: descriptor.step ?? 1 }
     : { min: 0, max: 100, step: 1 }
   const numeric = Number(value ?? bounds.min)
+  const name = descriptor.label ?? descriptor.name
   return (
-    <label className="flex items-center gap-2">
+    <div role="group" aria-label={name} className="flex items-center gap-2">
       <input
         type="range"
-        aria-label={descriptor.label ?? descriptor.name}
+        aria-label={name}
         min={bounds.min}
         max={bounds.max}
         step={bounds.step}
         value={Number.isFinite(numeric) ? numeric : bounds.min}
         onChange={(event) => onChange(marshalDescriptorValue(descriptor, event.target.value))}
-        className="h-1.5 w-28 accent-[var(--color-accent-strong)]"
+        className="h-1 w-28 accent-[var(--color-primary)]"
       />
-      <input
+      <Input
         type="number"
-        aria-label={`${descriptor.label ?? descriptor.name} 数值`}
+        size="sm"
+        aria-label={`${name} 数值`}
         min={bounds.min}
         max={bounds.max}
         step={bounds.step}
         value={Number.isFinite(numeric) ? numeric : bounds.min}
         onChange={(event) => onChange(marshalDescriptorValue(descriptor, event.target.value))}
-        className={INPUT_CLASS}
+        className="w-20"
       />
-    </label>
+    </div>
   )
 }
 
-function ValuePills({
+function ValueSegments({
   descriptor,
   model,
   options,
@@ -294,26 +294,25 @@ function ValuePills({
 }) {
   const value = effectiveValue(model, descriptor, values)
   return (
-    <div role="group" aria-labelledby={labelId(descriptor)} className={PILL_GROUP_CLASS}>
-      {options.map((option) => {
-        const selected = isSameValue(option.value, value)
-        return (
-          <button
-            key={String(option.value)}
-            type="button"
-            aria-pressed={selected}
-            title={option.description}
-            onClick={() => onChange(canonicalNameOf(descriptor), marshalDescriptorValue(descriptor, option.value))}
-            className={`${PILL_CLASS} ${selected ? PILL_SELECTED_CLASS : PILL_IDLE_CLASS}`}
-          >
+    <SegmentedControl
+      size="sm"
+      labelledBy={labelId(descriptor)}
+      // The group works in string space (a native control can only ever hand back
+      // a string); `marshalDescriptorValue` puts the descriptor's own type back on
+      // the way out, so an integer parameter still writes a number.
+      value={value === undefined ? undefined : String(value)}
+      items={options.map((option) => ({
+        value: String(option.value),
+        title: option.description,
+        label: (
+          <>
             <span>{`${option.label}${unit}`}</span>
-            {option.isDefault && (
-              <span className="text-[10px] font-normal text-muted-foreground">默认</span>
-            )}
-          </button>
-        )
-      })}
-    </div>
+            {option.isDefault && <span className="text-xs font-normal text-muted-foreground">默认</span>}
+          </>
+        ),
+      }))}
+      onChange={(next) => onChange(canonicalNameOf(descriptor), marshalDescriptorValue(descriptor, next))}
+    />
   )
 }
 

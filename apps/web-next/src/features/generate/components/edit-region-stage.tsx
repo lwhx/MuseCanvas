@@ -23,6 +23,8 @@ import {
 } from '@musecanvas/contracts'
 import type { DisplayRect, EditSelection, Point, RenderBox } from '@musecanvas/contracts'
 import { Eraser, ImageOff } from 'lucide-react'
+import { Button } from '@/shared/components/ui'
+import { cn } from '@/shared/lib/cn'
 import { stageAspectRatio } from '@/shared/components/media-frame'
 
 export interface EditRegionStageProps {
@@ -297,7 +299,7 @@ export function EditRegionStage({
       : rejectedDrag
         ? '框选范围过小，已忽略本次拖动'
         : selection
-          ? `选区 ${selection.width}×${selection.height} 像素，起点 (${selection.x}, ${selection.y})`
+          ? `选区 ${selection.width}×${selection.height} 像素，起点（${selection.x}，${selection.y}）`
           : '尚未框选'
 
   return (
@@ -314,9 +316,10 @@ export function EditRegionStage({
         onLostPointerCapture={cancelDrag}
         onKeyDown={handleKeyDown}
         style={{ aspectRatio: ratio }}
-        className={`relative max-h-[68vh] w-full max-w-3xl touch-none select-none overflow-hidden rounded-[var(--radius-control)] bg-surface-subtle ${
-          phase === 'ready' ? 'cursor-crosshair' : 'cursor-default'
-        }`}
+        className={cn(
+          'relative max-h-[68vh] w-full max-w-3xl touch-none select-none overflow-hidden rounded-control bg-tonal',
+          phase === 'ready' ? 'cursor-crosshair' : 'cursor-default',
+        )}
       >
         <img
           ref={imgRef}
@@ -331,7 +334,7 @@ export function EditRegionStage({
         {paintStyle ? (
           <span aria-hidden="true" className="pointer-events-none absolute inset-0 block">
             <span
-              className="absolute block border-2 border-accent"
+              className="absolute block border-2 border-primary"
               style={{ ...paintStyle, boxShadow: DIM_STYLE }}
             />
           </span>
@@ -346,7 +349,7 @@ export function EditRegionStage({
           // lives in the status line below, which is also the live region — the
           // same split `media-frame.tsx` uses for a dead preview.
           <span className="absolute inset-0 flex items-center justify-center">
-            <ImageOff aria-hidden="true" className="h-5 w-5 text-muted-foreground/50" />
+            <ImageOff aria-hidden="true" className="h-[var(--icon-md)] w-[var(--icon-md)] text-decorative-muted" />
           </span>
         ) : null}
       </div>
@@ -362,15 +365,16 @@ export function EditRegionStage({
             {status}
           </p>
         </div>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => onSelectionChange(null)}
           disabled={!selection}
-          className="flex min-h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-2.5 py-1 text-xs text-foreground transition-colors duration-[var(--motion-fast)] hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+          icon={<Eraser aria-hidden="true" />}
         >
-          <Eraser className="h-3.5 w-3.5" aria-hidden="true" />
           清除选区
-        </button>
+        </Button>
       </div>
     </div>
   )

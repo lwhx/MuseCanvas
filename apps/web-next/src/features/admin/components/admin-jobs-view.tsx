@@ -4,8 +4,30 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
-import type { AdminJob } from '@/shared/types'
-import { ArrowUpDown, Loader2, RefreshCw } from 'lucide-react'
+import type { AdminJob, JobStatus } from '@/shared/types'
+import { jobStatusMeta } from '@/shared/lib/job-status'
+import { ArrowUpDown, RefreshCw } from 'lucide-react'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  FormField,
+  PageHeader,
+  Select,
+  SkeletonRow,
+} from '@/shared/components/ui'
+
+/** The monitor keeps its fixed window: newest N jobs, no pagination. */
+const JOB_PAGE_LIMIT = 50
+
+/** Values accepted by `GET /api/admin/jobs?status=`; labels ride `jobStatusMeta`. */
+const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'all', label: '所有状态' },
+  ...(
+    ['queued', 'running', 'retry_wait', 'succeeded', 'failed', 'canceled'] as JobStatus[]
+  ).map((status) => ({ value: status, label: jobStatusMeta(status).label })),
+]
 
 export function AdminJobsView() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -14,6 +36,7 @@ export function AdminJobsView() {
   const {
     data: jobs = [],
     isLoading,
+    isError,
     refetch,
     isFetching,
   } = useQuery({
@@ -22,7 +45,7 @@ export function AdminJobsView() {
       const res = await api<{ items: AdminJob[] }>(API_ENDPOINTS.admin.jobs, {
         params: {
           ...(statusFilter === 'all' ? {} : { status: statusFilter }),
-          limit: 50,
+          limit: JOB_PAGE_LIMIT,
         },
       })
       return res.data?.items || []
@@ -41,112 +64,157 @@ export function AdminJobsView() {
   )
 
   const filterActive = statusFilter !== 'all'
+  const clearFilter = () => setStatusFilter('all')
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">任务监控</h1>
-          <p className="text-sm text-muted-foreground">全系统生成任务队列状态、错误日志与进度监控。</p>
-        </div>
-        <div className="flex gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground outline-none"
-          >
-            <option value="all">所有状态</option>
-            <option value="queued">排队中 (queued)</option>
-            <option value="running">运行中 (running)</option>
-            <option value="succeeded">成功 (succeeded)</option>
-            <option value="failed">失败 (failed)</option>
-            <option value="cancelled">已取消 (cancelled)</option>
-          </select>
-          <button
-            type="button"
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="任务监控"
+        description="全系统生成任务队列状态、错误日志与进度监控。"
+        actions={
+          <Button
+            variant="secondary"
             onClick={() => refetch()}
-            disabled={isFetching}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
+            loading={isFetching}
+            icon={<RefreshCw aria-hidden="true" />}
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             刷新
-          </button>
-        </div>
+          </Button>
+        }
+      />
+
+      {/* Filter bar above the table (components.md 数据表格页) */}
+      <div className="flex flex-wrap items-end gap-3">
+        <FormField label="任务状态" hint="按状态筛选最近的生成任务。" className="w-full sm:w-64">
+          <Select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
       </div>
 
-      <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface">
-        <table className="w-full text-left text-xs">
-          <thead className="border-b border-border bg-surface-subtle text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 font-medium">任务 ID</th>
-              <th className="px-4 py-3 font-medium">用户</th>
-              <th className="px-4 py-3 font-medium">模型</th>
-              <th className="px-4 py-3 font-medium">状态</th>
-              <th className="px-4 py-3 font-medium">耗时 / 错误</th>
-              <th aria-sort={timeSort === 'desc' ? 'descending' : 'ascending'} className="px-4 py-3 text-right font-medium">
-                <button
-                  type="button"
-                  onClick={() => setTimeSort((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
-                  className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-[var(--radius-control)] px-2 hover:bg-surface-subtle hover:text-foreground"
-                >
-                  提交时间
-                  <ArrowUpDown className="h-3 w-3" aria-hidden="true" />
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading ? (
+      <Card className="gap-0 overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">任务监控列表</caption>
+            <thead className="bg-tonal text-muted-foreground">
               <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                </td>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  任务 ID
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  用户
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  模型
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  状态
+                </th>
+                <th scope="col" className="px-4 py-3 text-sm font-medium">
+                  错误信息
+                </th>
+                <th scope="col" aria-sort={timeSort === 'desc' ? 'descending' : 'ascending'} className="px-4 py-3 text-right text-sm font-medium">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-mr-2 text-inherit"
+                    onClick={() => setTimeSort((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                    icon={<ArrowUpDown aria-hidden="true" />}
+                  >
+                    提交时间
+                  </Button>
+                </th>
               </tr>
-            ) : sortedJobs.length > 0 ? (
-              sortedJobs.map((job) => (
-                <tr key={job.id} className="hover:bg-surface-subtle/50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-muted-foreground">{job.id.slice(0, 8)}...</td>
-                  <td className="px-4 py-3 text-foreground">{job.userEmail || job.userId?.slice(0, 8)}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">{job.modelName || '未知模型'}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ${
-                        job.status === 'succeeded'
-                          ? 'bg-success-soft text-success'
-                          : job.status === 'failed'
-                            ? 'bg-danger-soft text-danger'
-                            : job.status === 'running'
-                              ? 'bg-accent-soft text-accent-strong'
-                              : 'bg-surface-subtle text-muted-foreground'
-                      }`}
-                    >
-                      {job.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {job.errorMessage ? (
-                      <span className="text-danger truncate max-w-xs block" title={job.errorMessage}>
-                        {job.errorMessage}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                    {new Date(job.createdAt).toLocaleString('zh-CN')}
+            </thead>
+            <tbody className="divide-y divide-border" aria-busy={isLoading || undefined}>
+              {isLoading ? (
+                Array.from({ length: 6 }, (_, index) => (
+                  <tr key={index}>
+                    <td colSpan={6} className="px-4 py-2">
+                      <SkeletonRow cells={6} className="py-1.5" />
+                    </td>
+                  </tr>
+                ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      variant="error"
+                      objectName="任务列表"
+                      title="无法加载任务列表"
+                      description="请求任务数据时出现问题，可能是服务暂时不可用。请稍后重试，或检查后端服务状态。"
+                      actionLabel="刷新重试"
+                      onAction={() => refetch()}
+                    />
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                  {filterActive ? '没有符合当前筛选条件的任务，调整筛选后重试。' : '暂无任务记录。'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : sortedJobs.length > 0 ? (
+                sortedJobs.map((job) => {
+                  const status = jobStatusMeta(job.status)
+                  return (
+                    <tr
+                      key={job.id}
+                      className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
+                    >
+                      <td className="px-4 py-3 font-mono text-muted-foreground">{job.id.slice(0, 8)}…</td>
+                      <td className="px-4 py-3 text-foreground">{job.userEmail || job.userId?.slice(0, 8) || '—'}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">{job.modelName || '未知模型'}</td>
+                      <td className="px-4 py-3">
+                        {/* Colour + the state in words: never colour alone. */}
+                        <Badge className={status.badge}>{status.label}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {job.errorMessage ? (
+                          <span className="block max-w-60 truncate text-danger" title={job.errorMessage}>
+                            {job.errorMessage}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                        {new Date(job.createdAt).toLocaleString('zh-CN')}
+                      </td>
+                    </tr>
+                  )
+                })
+              ) : filterActive ? (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      variant="no-results"
+                      objectName="任务"
+                      density="compact"
+                      onAction={clearFilter}
+                    />
+                  </td>
+                </tr>
+              ) : (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      variant="first-use"
+                      objectName="生成任务"
+                      density="compact"
+                      title="还没有生成任务"
+                      description="用户发起生成后，任务会按时间倒序出现在这里。"
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <p className="text-sm text-muted-foreground">仅显示最近 {JOB_PAGE_LIMIT} 条任务。</p>
     </div>
   )
 }

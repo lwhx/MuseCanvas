@@ -18,6 +18,7 @@ import {
   Divider,
   EmptyState,
   PageHeader,
+  Skeleton,
   SkeletonText,
   buttonVariants,
   useToast,
@@ -285,9 +286,12 @@ export function AccountView() {
                     {profileLoading ? (
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-busy>
                         {[0, 1, 2].map((slot) => (
-                          <div key={slot} className="flex min-w-0 flex-col gap-2">
-                            <SkeletonText lines={1} width="72%" />
-                            <SkeletonText lines={1} />
+                          <div key={slot} className="flex min-w-0 items-start gap-3">
+                            <Skeleton className="mt-1 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0" />
+                            <div className="flex min-w-0 flex-1 flex-col gap-1">
+                              <SkeletonText lines={1} width="42%" />
+                              <SkeletonText lines={1} width={slot === 1 ? '58%' : '72%'} />
+                            </div>
                           </div>
                         ))}
                         <p className="sr-only">正在加载账户资料…</p>
@@ -354,10 +358,16 @@ export function AccountView() {
                         {PROVIDERS.map((provider) => (
                           <div
                             key={provider.name}
-                            className="flex min-w-0 flex-col gap-3 rounded-control bg-tonal p-4"
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-control bg-tonal p-4"
                           >
-                            <SkeletonText lines={1} width="40%" />
-                            <SkeletonText lines={1} width="72%" />
+                            <div className="flex min-w-0 flex-1 items-start gap-2">
+                              <Skeleton className="mt-0.5 h-4 w-4 shrink-0" />
+                              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                <SkeletonText lines={1} width="40%" />
+                                <SkeletonText lines={1} width="72%" />
+                              </div>
+                            </div>
+                            <Skeleton className="h-[var(--control-sm)] w-24 rounded-control" />
                           </div>
                         ))}
                         <p className="sr-only">正在加载第三方绑定…</p>

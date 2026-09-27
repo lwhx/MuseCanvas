@@ -59,8 +59,8 @@ import {
   Crop,
   Download,
   ImageOff,
-  PanelRightClose,
-  PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   Sparkles,
   X,
@@ -541,9 +541,142 @@ export function GenerateConsole() {
         aria-label="创作台"
         className="relative flex min-h-0 w-full flex-1 overflow-hidden"
       >
-        {/* Left: Interactive Generation Studio */}
-        <div className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
-          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6">
+        {/* Left: recent activity rail, with active jobs and history. */}
+        <aside
+          aria-label="任务面板"
+          inert={!railOpen}
+          className={cn(
+            'hidden shrink-0 flex-col bg-surface transition-[width] md:flex',
+            'duration-[var(--motion-overlay)] ease-[var(--ease-standard)]',
+            railOpen ? 'w-72' : 'w-0 overflow-hidden',
+          )}
+        >
+          <div className="flex h-[var(--layout-header)] shrink-0 items-center justify-between px-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-[var(--icon-sm)] w-[var(--icon-sm)] text-muted-foreground" aria-hidden="true" />
+              <span className="text-xs font-medium text-foreground">任务面板</span>
+            </div>
+            <IconButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setRailOpen(false)}
+              aria-label="收起任务面板"
+              title="收起任务面板"
+              icon={<PanelLeftClose aria-hidden="true" />}
+            />
+          </div>
+
+          <ActiveJobsBoard {...boardProps} open={activeBoardOpen} onToggle={setActiveBoardOpen} />
+
+          {/* The rule that used to split the board from 历史 is now just air. */}
+          <h2 id="gen-history-heading" className="shrink-0 px-2 pt-6 text-sm">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-expanded={historyOpen}
+              aria-controls="gen-history-list"
+              onClick={() => setHistoryOpen(!historyOpen)}
+              className="w-full justify-start px-2 text-left"
+              icon={<ChevronRight aria-hidden="true" className={cn('motion-position', historyOpen && 'rotate-90')} />}
+            >
+              <span>历史</span>
+              {jobs.length > 0 && (
+                <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">
+                  {jobs.length}
+                </span>
+              )}
+            </Button>
+          </h2>
+
+          <div
+            id="gen-history-list"
+            aria-labelledby="gen-history-heading"
+            className={historyOpen ? 'min-h-0 flex-1 overflow-y-auto p-2' : 'hidden'}
+          >
+            {jobsLoading ? (
+              <div aria-busy="true" className="flex flex-col gap-2 py-2">
+                <span className="sr-only">加载历史记录中</span>
+                {Array.from({ length: 4 }, (_, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <SkeletonTile className="h-12 w-12 shrink-0 basis-auto" />
+                    <SkeletonRow cells={2} className="min-w-0 flex-1" />
+                  </div>
+                ))}
+              </div>
+            ) : jobs.length > 0 ? (
+              <ul className="m-0 flex list-none flex-col gap-2 p-0" role="list">
+                {jobs.map((j) => {
+                  const isSelected = j.id === (selectedJob?.id || '')
+                  const firstOutput = (j.outputs ?? [])[0]
+                  return (
+                    <li key={j.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectJob(j.id)}
+                        aria-current={isSelected ? 'true' : undefined}
+                        className={cn(
+                          'relative flex w-full min-w-0 gap-3 rounded-control p-2.5 pl-3 text-left transition-colors',
+                          'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+                          isSelected
+                            ? 'bg-tonal-selected'
+                            : 'bg-tonal enabled:hover:bg-tonal-hover',
+                        )}
+                      >
+                        {/* Selection rides the 4px primary bar plus the tonal step:
+                            the brand green is a status colour, never a selection one. */}
+                        {isSelected && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-y-2 left-0 w-1 rounded-pill bg-primary"
+                          />
+                        )}
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-control bg-tonal">
+                          {firstOutput ? (
+                            <MediaFrame
+                              src={outputUrl(firstOutput)}
+                              kind={isVideoOutput(firstOutput) ? 'video' : 'image'}
+                              alt=""
+                              layout="thumb"
+                              durationSeconds={
+                                isVideoOutput(firstOutput) ? firstOutput.metadata.durationSeconds : undefined
+                              }
+                              hasAudio={isVideoOutput(firstOutput) ? firstOutput.metadata.hasAudio : undefined}
+                            />
+                          ) : (
+                            <ImageOff aria-hidden="true" className="h-[var(--icon-md)] w-[var(--icon-md)] text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+                          <p className="truncate text-xs font-medium text-foreground">{j.prompt}</p>
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-xs text-muted-foreground">
+                              {j.modelName}
+                            </span>
+                            <JobStatusBadge status={j.status} />
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <EmptyState
+                variant="first-use"
+                objectName="生成记录"
+                density="compact"
+                title="还没有生成记录"
+                description="写下提示词并开始生成，这里会留下你最近的任务。"
+              />
+            )}
+          </div>
+        </aside>
+
+        {/* Center: full-width interactive generation studio. */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
+          <div className="flex min-w-0 w-full flex-1 flex-col gap-6">
             <PageHeader
               title={editing ? '局部修改' : isVideoTab ? '视频生成' : '图像生成'}
               description={
@@ -555,7 +688,7 @@ export function GenerateConsole() {
 
             {/* Prompt & Input Box */}
             <Card className="gap-0 p-4">
-              <div className="mx-auto w-full max-w-3xl">
+              <div className="w-full">
                 <label htmlFor="generate-prompt" className="sr-only">生成提示词</label>
                 <textarea
                   id="generate-prompt"
@@ -938,145 +1071,8 @@ export function GenerateConsole() {
           </div>
         </div>
 
-        {/* Right: in-progress board stacked above the history list.
-            No `border-l`: the white rail against the canvas column is already a
-            surface step, and the 12px/16px slot below is shared with the reopen
-            button, so the two toggles have to sit in the same place. */}
-        <aside
-          aria-label="任务面板"
-          inert={!railOpen}
-          className={cn(
-            'hidden shrink-0 flex-col bg-surface transition-[width] md:flex',
-            'duration-[var(--motion-overlay)] ease-[var(--ease-standard)]',
-            railOpen ? 'w-72' : 'w-0 overflow-hidden',
-          )}
-        >
-          <div className="flex h-[var(--layout-header)] shrink-0 items-center justify-between px-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-[var(--icon-sm)] w-[var(--icon-sm)] text-muted-foreground" aria-hidden="true" />
-              <span className="text-xs font-medium text-foreground">任务面板</span>
-            </div>
-            <IconButton
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setRailOpen(false)}
-              aria-label="收起任务面板"
-              title="收起任务面板"
-              icon={<PanelRightClose aria-hidden="true" />}
-            />
-          </div>
-
-          <ActiveJobsBoard {...boardProps} open={activeBoardOpen} onToggle={setActiveBoardOpen} />
-
-          {/* The rule that used to split the board from 历史 is now just air. */}
-          <h2 id="gen-history-heading" className="shrink-0 px-2 pt-6 text-sm">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-expanded={historyOpen}
-              aria-controls="gen-history-list"
-              onClick={() => setHistoryOpen(!historyOpen)}
-              className="w-full justify-start px-2 text-left"
-              icon={<ChevronRight aria-hidden="true" className={cn('motion-position', historyOpen && 'rotate-90')} />}
-            >
-              <span>历史</span>
-              {jobs.length > 0 && (
-                <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">
-                  {jobs.length}
-                </span>
-              )}
-            </Button>
-          </h2>
-
-          <div
-            id="gen-history-list"
-            aria-labelledby="gen-history-heading"
-            className={historyOpen ? 'min-h-0 flex-1 overflow-y-auto p-2' : 'hidden'}
-          >
-            {jobsLoading ? (
-              <div aria-busy="true" className="flex flex-col gap-2 py-2">
-                <span className="sr-only">加载历史记录中</span>
-                {Array.from({ length: 4 }, (_, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <SkeletonTile className="h-12 w-12 shrink-0 basis-auto" />
-                    <SkeletonRow cells={2} className="min-w-0 flex-1" />
-                  </div>
-                ))}
-              </div>
-            ) : jobs.length > 0 ? (
-              <ul className="m-0 flex list-none flex-col gap-2 p-0" role="list">
-                {jobs.map((j) => {
-                  const isSelected = j.id === (selectedJob?.id || '')
-                  const firstOutput = (j.outputs ?? [])[0]
-                  return (
-                    <li key={j.id}>
-                      <button
-                        type="button"
-                        onClick={() => selectJob(j.id)}
-                        aria-current={isSelected ? 'true' : undefined}
-                        className={cn(
-                          'relative flex w-full min-w-0 gap-3 rounded-control p-2.5 pl-3 text-left transition-colors',
-                          'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
-                          isSelected
-                            ? 'bg-tonal-selected'
-                            : 'bg-tonal enabled:hover:bg-tonal-hover',
-                        )}
-                      >
-                        {/* Selection rides the 4px primary bar plus the tonal step:
-                            the brand green is a status colour, never a selection one. */}
-                        {isSelected && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute inset-y-2 left-0 w-1 rounded-pill bg-primary"
-                          />
-                        )}
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-control bg-tonal">
-                          {firstOutput ? (
-                            <MediaFrame
-                              src={outputUrl(firstOutput)}
-                              kind={isVideoOutput(firstOutput) ? 'video' : 'image'}
-                              alt=""
-                              layout="thumb"
-                              durationSeconds={
-                                isVideoOutput(firstOutput) ? firstOutput.metadata.durationSeconds : undefined
-                              }
-                              hasAudio={isVideoOutput(firstOutput) ? firstOutput.metadata.hasAudio : undefined}
-                            />
-                          ) : (
-                            <ImageOff aria-hidden="true" className="h-[var(--icon-md)] w-[var(--icon-md)] text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-                          <p className="truncate text-xs font-medium text-foreground">{j.prompt}</p>
-                          <div className="flex min-w-0 items-center justify-between gap-2">
-                            <span className="min-w-0 truncate text-xs text-muted-foreground">
-                              {j.modelName}
-                            </span>
-                            <JobStatusBadge status={j.status} />
-                          </div>
-                        </div>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <EmptyState
-                variant="first-use"
-                objectName="生成记录"
-                density="compact"
-                title="还没有生成记录"
-                description="写下提示词并开始生成，这里会留下你最近的任务。"
-              />
-            )}
-          </div>
-        </aside>
-
-        {/* Reopen control. It takes over the collapse control's exact slot —
-            12px from the top, 16px from the right, 32x32, 16px glyph — so
-            collapsing the rail never makes the button jump 68px down. */}
+        {/* Reopen control stays in the left rail's slot, so collapsing it never
+            shifts the button away from the panel edge. */}
         {!railOpen && (
           <IconButton
             type="button"
@@ -1085,8 +1081,8 @@ export function GenerateConsole() {
             onClick={() => setRailOpen(true)}
             aria-label="展开任务面板"
             title="展开任务面板"
-            className="absolute right-4 top-3 hidden bg-surface shadow-soft md:inline-flex"
-            icon={<PanelRightOpen aria-hidden="true" />}
+            className="absolute left-4 top-3 hidden bg-surface shadow-soft md:inline-flex"
+            icon={<PanelLeftOpen aria-hidden="true" />}
           />
         )}
       </div>

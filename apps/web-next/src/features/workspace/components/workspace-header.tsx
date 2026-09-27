@@ -75,6 +75,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
   // is live — `mode` has to come in. See `resolveActiveNavKey`.
   const activeKey = resolveActiveNavKey(pathname, mode)
   const currentPageName = navLabelFor(activeKey)
+  const isGenerateRoute = pathname === GENERATE_ROUTE
 
   useEffect(() => {
     closeDrawer()
@@ -105,7 +106,12 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
   return (
     <>
       <header className="relative z-sticky flex h-[var(--layout-header)] shrink-0 items-center bg-surface shadow-soft">
-        <div className="mx-auto flex w-full max-w-content items-center gap-3 px-4 sm:px-6">
+        <div
+          className={cn(
+            'flex w-full items-center gap-3 px-4 sm:px-6',
+            !isGenerateRoute && 'mx-auto max-w-content',
+          )}
+        >
           <Link
             href={GENERATE_ROUTE}
             className="shrink-0 rounded-control text-subtitle font-medium tracking-tight text-foreground"

@@ -177,7 +177,7 @@ MuseCanvas
 
 1. 项目变更从 `dev` 分支进入，禁止直接向 `main` 推送。完成变更后推送 `dev` 并创建目标为 `main` 的 PR。
 2. PR CI 仅对目标为 `main` 且命中 workflow 路径过滤器的变更触发。PR 中的 Docker 工作流只构建、不推送镜像；命中路径过滤器的 `main` push 会自动发布 GHCR 镜像，此外 Docker workflow 的 `workflow_dispatch` 也可在非 PR ref 上手动构建并推送。
-3. 若需在合并前部署 `dev` 验证，必须对 `.github/workflows/docker-image.yml` 在 `dev` ref 手动运行 `workflow_dispatch`。镜像发布后优先使用 `sha-<commit>` 不可变 tag；`latest` 仅由默认分支构建更新，`dev` tag 是可变 tag。
+3. 若需在合并前部署 `dev` 验证，必须对 `.github/workflows/docker-image.yml` 在 `dev` ref 手动运行 `workflow_dispatch`。当前 workflow 生成 `dev` 和 `sha-<7 位短 commit SHA>` tag（例如 `sha-003465a`），不使用完整 commit SHA 作为 tag；记录镜像 digest 才能严格固定镜像。`latest` 仅由默认分支构建更新，`dev` tag 是可变 tag。
 4. 镜像发布与远端部署是独立步骤。本仓库没有自动 SSH/部署工作流；除非另有已验证的自动化配置，部署由操作人员在部署机使用 `deploy/compose.images.yaml` 执行 `pull` 和 `up -d`，并明确设置 `MUSECANVAS_IMAGE_TAG`。部署机的 `.env` 必须预先提供 `POSTGRES_PASSWORD` 和 `APP_MASTER_KEY` 等 Compose 要求的配置；不得读取或输出密钥值。
 5. 部署后必须进行健康检查和目标场景烟雾测试；CI、镜像构建通过不等于已部署或验证。所有验证通过后才合并 PR；失败时停止合并，记录故障并按部署机既定回滚流程恢复。
 6. 不得把 SSH 密钥、访问令牌、`.env` 或其他部署凭据写入仓库、PR 或日志。部署主机、目录、测试地址和回滚方式只能依据已核实的信息，不得猜测。

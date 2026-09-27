@@ -162,13 +162,13 @@ export function AdminPromptTemplatesView() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" role="status" aria-busy="true">
           <span className="sr-only">正在加载提示词模板</span>
           {Array.from({ length: 6 }, (_, index) => (
-            <Card key={index} aria-hidden="true" className="gap-3">
+            <Card key={index} aria-hidden="true" density="compact">
               <div className="flex items-start justify-between gap-3">
-                <SkeletonTile className="aspect-auto h-5 w-24" />
-                <SkeletonTile className="aspect-auto h-[var(--control-sm)] w-[var(--control-sm)]" />
+                <SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" />
+                <SkeletonTile className="aspect-auto h-[var(--control-sm)] w-[var(--control-sm)] rounded-control" />
               </div>
-              <SkeletonTile className="aspect-auto h-5 w-40" />
-              <SkeletonText lines={2} />
+              <SkeletonText width={index % 2 === 0 ? '11rem' : '9rem'} />
+              <SkeletonText lines={3} />
             </Card>
           ))}
         </div>

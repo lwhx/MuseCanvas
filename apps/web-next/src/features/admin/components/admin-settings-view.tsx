@@ -36,6 +36,7 @@ import {
   Select,
   SkeletonRow,
   SkeletonText,
+  SkeletonTile,
   Tabs,
 } from '@/shared/components/ui'
 import type { BadgeTone } from '@/shared/components/ui'
@@ -711,23 +712,39 @@ function RuntimeSection({
 
 function SettingsSkeleton() {
   return (
-    <div className="flex flex-col gap-8 md:flex-row md:items-start">
-      <div className="flex flex-col gap-3 md:w-settings-nav md:shrink-0" aria-hidden="true">
-        <SkeletonRow cellWidth="88px" />
-        <SkeletonRow cellWidth="160px" />
-        <SkeletonRow cellWidth="120px" />
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap gap-2 md:hidden" aria-hidden="true">
+        {['w-[72px]', 'w-[88px]', 'w-[64px]', 'w-[80px]'].map((width, index) => (
+          <SkeletonTile key={index} className={`aspect-auto h-[var(--control-md)] rounded-control ${width}`} />
+        ))}
       </div>
-      <Card className="flex-1 gap-6">
-        <CardHeader className="gap-2">
-          <SkeletonText lines={1} width="200px" />
-          <SkeletonText lines={1} width="320px" />
-        </CardHeader>
-        <CardBody>
-          <SkeletonText lines={2} />
-          <SkeletonRow cells={2} />
-          <SkeletonRow cells={2} />
-        </CardBody>
-      </Card>
+      <div className="flex flex-col gap-8 md:flex-row md:items-start">
+        <nav aria-hidden="true" className="hidden shrink-0 flex-col gap-6 md:flex md:w-settings-nav">
+          {[['96px', '128px', '112px'], ['80px', '144px', '104px']].map((group, index) => (
+            <div key={index} className="flex flex-col gap-2">
+              <SkeletonText width="96px" />
+              {group.map((width, itemIndex) => <SkeletonRow key={itemIndex} cellWidth={width} />)}
+            </div>
+          ))}
+        </nav>
+        <Card aria-hidden="true" className="flex-1 gap-6">
+          <CardHeader className="gap-2">
+            <SkeletonText width="200px" />
+            <SkeletonText width="320px" />
+          </CardHeader>
+          <CardBody className="gap-6">
+            <SkeletonText lines={2} />
+            <div className="grid gap-6 sm:grid-cols-2">
+              {[0, 1, 2, 3].map((index) => (
+                <div key={index} className="flex flex-col gap-2">
+                  <SkeletonText width={index % 2 ? '7rem' : '9rem'} />
+                  <SkeletonTile className="aspect-auto h-[var(--control-md)] w-full rounded-control" />
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      </div>
     </div>
   )
 }

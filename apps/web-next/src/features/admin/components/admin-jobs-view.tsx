@@ -15,7 +15,7 @@ import {
   FormField,
   PageHeader,
   Select,
-  SkeletonRow,
+  SkeletonText,
 } from '@/shared/components/ui'
 
 /** The monitor keeps its fixed window: newest N jobs, no pagination. */
@@ -137,9 +137,12 @@ export function AdminJobsView() {
               {isLoading ? (
                 Array.from({ length: 6 }, (_, index) => (
                   <tr key={index}>
-                    <td colSpan={6} className="px-4 py-2">
-                      <SkeletonRow cells={6} className="py-1.5" />
-                    </td>
+                    <td className="px-4 py-3"><SkeletonText width="7rem" /></td>
+                    <td className="px-4 py-3"><SkeletonText width="9rem" /></td>
+                    <td className="px-4 py-3"><SkeletonText width="8rem" /></td>
+                    <td className="px-4 py-3"><SkeletonText width="5rem" /></td>
+                    <td className="px-4 py-3"><SkeletonText width="10rem" /></td>
+                    <td className="px-4 py-3 text-right"><SkeletonText width="8rem" className="ml-auto" /></td>
                   </tr>
                 ))
               ) : isError ? (

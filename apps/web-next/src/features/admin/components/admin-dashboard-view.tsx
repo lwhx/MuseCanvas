@@ -14,7 +14,7 @@ import {
   Card,
   EmptyState,
   PageHeader,
-  SkeletonRow,
+  SkeletonText,
   StatCard,
   buttonVariants,
 } from '@/shared/components/ui'
@@ -38,6 +38,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
     data: metrics,
     refetch: refetchMetrics,
     isFetching: isFetchingMetrics,
+    isLoading: metricsLoading,
     isError: isMetricsError,
     error: metricsError,
   } = useQuery({
@@ -53,6 +54,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
     data: jobs,
     refetch: refetchJobs,
     isFetching: isFetchingJobs,
+    isLoading: jobsLoading,
     isError: isJobsError,
   } = useQuery({
     queryKey: ['admin', 'jobs', { limit: RECENT_JOB_LIMIT }],
@@ -68,8 +70,8 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
   const refreshing = isFetchingMetrics || isFetchingJobs
   // Skeleton only while there is nothing to show; a background refresh must not
   // wipe the numbers the reader is looking at.
-  const metricsPending = !metrics && isFetchingMetrics
-  const jobsPending = !jobs && isFetchingJobs
+  const metricsPending = metricsLoading
+  const jobsPending = jobsLoading
 
   function handleRefresh() {
     refetchMetrics()
@@ -153,9 +155,10 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
                 {jobsPending ? (
                   Array.from({ length: 5 }, (_, index) => (
                     <tr key={index}>
-                      <td colSpan={4} className="px-4 py-2">
-                        <SkeletonRow cells={4} className="py-1.5" />
-                      </td>
+                      <td className="px-4 py-3"><SkeletonText width="7rem" /></td>
+                      <td className="px-4 py-3"><SkeletonText width="9rem" /></td>
+                      <td className="px-4 py-3"><SkeletonText width="5rem" /></td>
+                      <td className="px-4 py-3 text-right"><SkeletonText width="8rem" className="ml-auto" /></td>
                     </tr>
                   ))
                 ) : isJobsError ? (

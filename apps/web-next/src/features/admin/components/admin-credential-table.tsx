@@ -15,7 +15,8 @@ import {
   Card,
   EmptyState,
   IconButton,
-  SkeletonRow,
+  SkeletonText,
+  SkeletonTile,
   Switch,
 } from '@/shared/components/ui'
 
@@ -152,9 +153,12 @@ export function AdminCredentialTable({
               {isLoading ? (
                 Array.from({ length: 3 }, (_, index) => (
                   <tr key={index}>
-                    <td colSpan={COLUMN_COUNT} className="px-4 py-2">
-                      <SkeletonRow cells={COLUMN_COUNT} className="py-1.5" />
-                    </td>
+                    <td className="px-4 py-3"><div className="flex flex-col gap-1"><SkeletonText width="9rem" /><SkeletonText width="11rem" /><SkeletonText width="8rem" /></div></td>
+                    <td className="px-4 py-3"><SkeletonText width="7rem" /></td>
+                    <td className="px-4 py-3"><SkeletonText lines={variant === 'media' ? 2 : 1} width="9rem" /></td>
+                    <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" /></td>
+                    <td className="px-4 py-3"><div className="flex items-center gap-2"><SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" /><SkeletonText width="3rem" /></div></td>
+                    <td className="px-4 py-3"><div className="flex flex-wrap items-center justify-end gap-2"><SkeletonTile className="aspect-auto h-8 w-20 rounded-control" /><SkeletonTile className="aspect-auto h-8 w-8 rounded-control" /></div></td>
                   </tr>
                 ))
               ) : error ? (

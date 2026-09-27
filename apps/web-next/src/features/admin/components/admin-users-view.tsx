@@ -16,7 +16,8 @@ import {
   FormField,
   Input,
   PageHeader,
-  SkeletonRow,
+  SkeletonText,
+  SkeletonTile,
   Tabs,
 } from '@/shared/components/ui'
 import type { BadgeTone, TabItem } from '@/shared/components/ui'
@@ -134,9 +135,9 @@ export function AdminUsersView() {
                 {usersLoading ? (
                   Array.from({ length: 5 }, (_, index) => (
                     <tr key={index}>
-                      <td colSpan={3} className="px-4 py-2">
-                        <SkeletonRow cells={3} className="py-1.5" />
-                      </td>
+                      <td className="px-4 py-3"><SkeletonText width="14rem" /></td>
+                      <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" /></td>
+                      <td className="px-4 py-3 text-right"><SkeletonText width="7rem" /></td>
                     </tr>
                   ))
                 ) : usersError ? (
@@ -214,9 +215,9 @@ export function AdminUsersView() {
                 {invitesLoading ? (
                   Array.from({ length: 5 }, (_, index) => (
                     <tr key={index}>
-                      <td colSpan={3} className="px-4 py-2">
-                        <SkeletonRow cells={3} className="py-1.5" />
-                      </td>
+                      <td className="px-4 py-3"><SkeletonText width="12rem" /></td>
+                      <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" /></td>
+                      <td className="px-4 py-3 text-right"><SkeletonText width="7rem" /></td>
                     </tr>
                   ))
                 ) : invitesError ? (

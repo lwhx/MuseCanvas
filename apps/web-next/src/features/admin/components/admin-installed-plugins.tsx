@@ -21,7 +21,8 @@ import {
   Card,
   EmptyState,
   IconButton,
-  SkeletonRow,
+  SkeletonText,
+  SkeletonTile,
   Spinner,
   Switch,
 } from '@/shared/components/ui'
@@ -251,10 +252,27 @@ export function AdminInstalledPlugins({ kind }: AdminInstalledPluginsProps) {
       )}
 
       {isLoading ? (
-        <Card density="compact" aria-busy>
-          <SkeletonRow cells={4} className="py-1.5" />
-          <SkeletonRow cells={4} className="py-1.5" />
-        </Card>
+        <div className="grid gap-4 lg:grid-cols-2" role="status" aria-busy="true">
+          <span className="sr-only">正在加载已安装插件</span>
+          {Array.from({ length: 2 }, (_, index) => (
+            <Card key={index} density="compact" aria-hidden="true" className="h-full gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-2"><SkeletonText width="10rem" /><SkeletonText width="8rem" /></div>
+                <SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" />
+              </div>
+              <SkeletonText lines={2} />
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
+                <SkeletonText width="7rem" /><SkeletonText width="9rem" />
+                <SkeletonText width="7rem" /><SkeletonText width="8rem" />
+                <SkeletonText width="7rem" /><SkeletonText width="12rem" />
+              </div>
+              <SkeletonText width="8rem" />
+              <div className="flex gap-2"><SkeletonTile className="aspect-auto h-6 w-20 rounded-pill" /><SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" /></div>
+              <SkeletonText lines={2} />
+              <div className="mt-auto flex justify-end"><SkeletonTile className="aspect-auto h-8 w-24 rounded-control" /></div>
+            </Card>
+          ))}
+        </div>
       ) : error ? (
         <Alert
           tone="danger"

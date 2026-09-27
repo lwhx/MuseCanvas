@@ -12,8 +12,8 @@ import {
   Card,
   EmptyState,
   PageHeader,
-  SkeletonRow,
   SkeletonText,
+  SkeletonTile,
   Switch,
 } from '@/shared/components/ui'
 import { RefreshCw } from 'lucide-react'
@@ -101,14 +101,23 @@ export function AdminOAuthView() {
       {isLoading ? (
         <div className="flex flex-col gap-4" role="status" aria-busy="true">
           <span className="sr-only">正在加载 OAuth 提供商</span>
-          <Card aria-hidden="true" className="gap-3">
-            <SkeletonText lines={1} width="160px" />
-            <SkeletonRow cells={2} />
-          </Card>
-          <Card aria-hidden="true" className="gap-3">
-            <SkeletonText lines={1} width="140px" />
-            <SkeletonRow cells={2} />
-          </Card>
+          {['github', 'google'].map((provider) => (
+            <Card key={provider} aria-hidden="true" className="flex-row flex-wrap items-center justify-between gap-x-6 gap-y-3">
+              <div className="flex min-w-0 flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <SkeletonText width={provider === 'github' ? '6rem' : '7rem'} />
+                  <SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" />
+                  <SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" />
+                </div>
+                <SkeletonText width="15rem" />
+                <SkeletonText width="22rem" />
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <SkeletonText width="5rem" />
+                <SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" />
+              </div>
+            </Card>
+          ))}
         </div>
       ) : null}
 

@@ -34,7 +34,8 @@ import {
   Input,
   PageHeader,
   Select,
-  SkeletonRow,
+  SkeletonText,
+  SkeletonTile,
   Switch,
 } from '@/shared/components/ui'
 
@@ -245,9 +246,13 @@ export function AdminMediaModelsView() {
               {modelsLoading ? (
                 Array.from({ length: 3 }, (_, index) => (
                   <tr key={index}>
-                    <td colSpan={MODEL_COLUMN_COUNT} className="px-4 py-2">
-                      <SkeletonRow cells={MODEL_COLUMN_COUNT} className="py-1.5" />
-                    </td>
+                    <td className="px-4 py-3"><div className="flex flex-col gap-1"><SkeletonText width="9rem" /><SkeletonText width="6rem" /></div></td>
+                    <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-12 rounded-pill" /></td>
+                    <td className="px-4 py-3"><SkeletonText width="8rem" /></td>
+                    <td className="px-4 py-3"><SkeletonText width="8rem" /></td>
+                    <td className="px-4 py-3 text-right"><SkeletonText width="3rem" /></td>
+                    <td className="px-4 py-3"><div className="flex items-center gap-2"><SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" /><SkeletonText width="3rem" /></div></td>
+                    <td className="px-4 py-3 text-right"><SkeletonTile className="aspect-auto h-8 w-8 rounded-control" /></td>
                   </tr>
                 ))
               ) : modelsError ? (
@@ -358,10 +363,22 @@ export function AdminMediaModelsView() {
         </div>
 
         {templatesLoading ? (
-          <Card density="compact" aria-busy>
-            <SkeletonRow cells={4} className="py-1.5" />
-            <SkeletonRow cells={4} className="py-1.5" />
-          </Card>
+          <div className="grid gap-4 lg:grid-cols-2" role="status" aria-busy="true">
+            <span className="sr-only">正在加载供应商插件目录</span>
+            {Array.from({ length: 2 }, (_, index) => (
+              <Card key={index} density="compact" aria-hidden="true" className="h-full gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-col gap-2"><SkeletonText width="10rem" /><SkeletonText width="7rem" /></div>
+                  <div className="flex flex-col items-end gap-2"><SkeletonTile className="aspect-auto h-6 w-12 rounded-pill" /><SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" /></div>
+                </div>
+                <SkeletonText lines={2} />
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2"><SkeletonText width="5rem" /><SkeletonText width="9rem" /><SkeletonText width="5rem" /><SkeletonText width="7rem" /><SkeletonText width="5rem" /><SkeletonText width="10rem" /></div>
+                <SkeletonText width="8rem" />
+                <div className="flex gap-2"><SkeletonTile className="aspect-auto h-6 w-20 rounded-pill" /><SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" /></div>
+                <SkeletonTile className="mt-auto aspect-auto h-[var(--control-md)] w-full rounded-control" />
+              </Card>
+            ))}
+          </div>
         ) : templatesError ? (
           <Alert
             tone="danger"

@@ -20,8 +20,8 @@ export const metadata = {
  */
 function GenerateConsoleFallback() {
   return (
-    <div aria-busy="true" className="flex min-h-0 w-full flex-1 overflow-hidden">
-      <main className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6 lg:p-8">
+    <div role="region" aria-label="创作台" aria-busy="true" className="flex min-h-0 w-full flex-1 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6 lg:p-8">
         <PageHeader title="创作台" description="正在载入创作台…" />
         <div className="flex flex-col gap-0 rounded-card bg-surface p-4 shadow-soft">
           <div className="mx-auto w-full max-w-3xl space-y-2">
@@ -37,7 +37,7 @@ function GenerateConsoleFallback() {
           </div>
         </div>
         <span className="sr-only">正在载入创作台</span>
-      </main>
+      </div>
       <aside aria-hidden="true" className="hidden w-72 shrink-0 flex-col gap-3 bg-surface p-4 md:flex">
         <SkeletonRow cells={2} cellWidth="96px" />
         {Array.from({ length: 2 }, (_, index) => (

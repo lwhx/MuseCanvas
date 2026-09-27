@@ -38,7 +38,6 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
     data: metrics,
     refetch: refetchMetrics,
     isFetching: isFetchingMetrics,
-    isLoading: metricsLoading,
     isError: isMetricsError,
     error: metricsError,
   } = useQuery({
@@ -70,7 +69,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
   const refreshing = isFetchingMetrics || isFetchingJobs
   // Skeleton only while there is nothing to show; a background refresh must not
   // wipe the numbers the reader is looking at.
-  const metricsPending = metricsLoading
+  const metricsPending = metrics == null && isFetchingMetrics
   const jobsPending = jobsLoading
 
   function handleRefresh() {

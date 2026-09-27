@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, RefreshCw, XCircle } from 'lucide-react'
 import { JobStatusBadge } from '@/shared/components/job-status-badge'
 import { MediaFrame } from '@/shared/components/media-frame'
-import { Alert, Button, Card, Progress, SkeletonRow } from '@/shared/components/ui'
+import { Alert, Button, Card, Progress, Skeleton, SkeletonRow, SkeletonTile } from '@/shared/components/ui'
 import { formatElapsed, isJobActive, jobStatusMeta, phaseLabel } from '@/shared/lib/job-status'
 import { cn } from '@/shared/lib/cn'
 import { isVideoOutput, outputUrl } from '@/shared/types'
@@ -174,12 +174,24 @@ export function ActiveJobsBoard({
         </Alert>
       ) : rows.length === 0 && !open ? null : rows.length === 0 ? (
         isLoading ? (
-          <div aria-busy="true" className="flex flex-col gap-3 py-2">
+          <div aria-busy="true">
             <span className="sr-only">加载任务中</span>
-            <SkeletonRow cells={2} cellWidth="96px" />
-            <SkeletonRow cells={3} />
-            <SkeletonRow cells={2} cellWidth="96px" />
-            <SkeletonRow cells={3} />
+            <ul id={listId} role="list" className="m-0 flex list-none flex-col gap-1 overflow-hidden p-0">
+              {Array.from({ length: 2 }, (_, index) => (
+                <li key={index} aria-hidden="true" className="flex gap-3 rounded-control bg-tonal p-3">
+                  <SkeletonTile className="h-12 w-12 shrink-0 basis-auto rounded-control" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <SkeletonRow cells={2} cellWidth="96px" className="min-h-4" />
+                    <Skeleton className="h-1 w-full rounded-full" />
+                    <SkeletonRow />
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-3 flex-1" />
+                      <Skeleton className="h-[var(--control-sm)] w-14" />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : (
           <p className="py-2 text-xs text-muted-foreground">当前没有进行中的任务</p>

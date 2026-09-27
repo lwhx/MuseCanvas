@@ -555,30 +555,32 @@ export function GenerateConsole() {
 
             {/* Prompt & Input Box */}
             <Card className="gap-0 p-4">
-              <label htmlFor="generate-prompt" className="sr-only">生成提示词</label>
-              <textarea
-                id="generate-prompt"
-                rows={4}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  isVideoTab
-                    ? '描述你想生成的视频内容，例如：镜头缓慢推进晨雾中的森林，晨光穿透树叶，电影感运镜……'
-                    : editing
-                      ? '描述要修改的内容，例如：把框选区域内的人物换成一件红色风衣，其余保持不变……'
-                      : '描述你想生成的画面内容，例如：赛博朋克风格未来雨夜街道，霓虹灯倒影，8k 高细节……'
-                }
-                aria-describedby="generate-prompt-help"
-                className="w-full resize-none bg-transparent text-sm leading-[1.59] text-foreground placeholder:text-muted-foreground"
-              />
-              <p id="generate-prompt-help" className="mt-1 text-xs text-muted-foreground">
-                支持 Ctrl/⌘ + Enter 快捷生成。
-              </p>
+              <div className="mx-auto w-full max-w-3xl">
+                <label htmlFor="generate-prompt" className="sr-only">生成提示词</label>
+                <textarea
+                  id="generate-prompt"
+                  rows={4}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={
+                    isVideoTab
+                      ? '描述你想生成的视频内容，例如：镜头缓慢推进晨雾中的森林，晨光穿透树叶，电影感运镜……'
+                      : editing
+                        ? '描述要修改的内容，例如：把框选区域内的人物换成一件红色风衣，其余保持不变……'
+                        : '描述你想生成的画面内容，例如：赛博朋克风格未来雨夜街道，霓虹灯倒影，8k 高细节……'
+                  }
+                  aria-describedby="generate-prompt-help"
+                  className="w-full resize-none bg-transparent text-left text-sm leading-[1.59] text-foreground placeholder:text-muted-foreground"
+                />
+                <p id="generate-prompt-help" className="mt-1 text-xs text-muted-foreground">
+                  支持 Ctrl/⌘ + Enter 快捷生成。
+                </p>
+              </div>
 
               {/* Controls Bar — separated from the textarea by space, never a rule */}
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="mt-5 flex flex-wrap items-end gap-x-4 gap-y-3">
+                <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
                   {/* Model Selector */}
                   <div className="flex flex-col items-start gap-1">
                     <label htmlFor="generate-model" className="sr-only">生成模型</label>
@@ -681,7 +683,7 @@ export function GenerateConsole() {
                 </div>
 
                 {/* Generate Button */}
-                <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-3">
+                <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-3">
                   {submitBlockedReason && (
                     <span
                       id="generate-submit-blocker"

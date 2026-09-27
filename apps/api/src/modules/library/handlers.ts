@@ -38,7 +38,7 @@ export async function listLibrary(context: AuthedContext) {
   if (cursor) { values.push(cursor.createdAt, cursor.id); conditions.push(`(a.created_at,a.id)<($${values.length - 1}::timestamptz,$${values.length}::uuid)`) }
   const where = conditions.join(' AND ')
   // The cursor says where we are, not how many match: drop it from the total.
-  const totalValues = cursor ? values.slice(0, -2) : values
+  const totalValues = values.slice(0, cursor ? -2 : undefined)
   const totalWhere = cursor ? conditions.slice(0, -1).join(' AND ') : where
   values.push(limit + 1)
   const page = await db().query(`${LIBRARY_SELECT_COLUMNS}

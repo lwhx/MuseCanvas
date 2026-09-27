@@ -21,6 +21,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Skeleton,
   SkeletonRow,
   SkeletonText,
   Stepper,
@@ -95,6 +96,62 @@ const steps: WizardStep[] = [
     manual: ['下方“环境检查”来自服务端读取结果；其余条目需要你逐项人工确认。'],
   },
 ]
+
+export function SetupWizardSkeleton() {
+  return (
+    <div className="flex min-h-screen flex-col bg-canvas text-foreground" role="status" aria-busy="true">
+      <span className="sr-only">正在读取系统配置状态</span>
+      <header className="flex min-h-[var(--layout-header)] shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4 sm:px-6" aria-hidden="true">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+      </header>
+      <div className="shrink-0 border-b border-border bg-tonal px-4 py-4 sm:px-6" aria-hidden="true">
+        <ol className="mx-auto flex w-full max-w-content flex-col gap-4 sm:flex-row sm:items-start sm:gap-0">
+          {steps.map((step) => (
+            <li key={step.id} className="relative flex min-w-0 items-center gap-3 pb-6 last:pb-0 sm:flex-1 sm:flex-col sm:items-center sm:gap-2 sm:pb-0">
+              <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+              <Skeleton className="h-4 w-28 sm:max-w-full" />
+            </li>
+          ))}
+        </ol>
+      </div>
+      <main className="flex flex-1 justify-center px-4 py-6 sm:px-6" aria-hidden="true">
+        <div className="w-full max-w-form">
+          <Card className="gap-6">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-6 w-40" />
+              <SkeletonText lines={1} />
+            </div>
+            <div className="flex flex-col gap-6">
+              <SkeletonText lines={2} />
+              <div className="flex flex-col gap-3 rounded-control bg-tonal p-4">
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-32" />
+                  <SkeletonText lines={1} />
+                </div>
+                <SkeletonRow />
+                <SkeletonRow />
+              </div>
+              <div className="flex flex-col gap-3 rounded-control bg-tonal p-4">
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-32" />
+                  <SkeletonText lines={1} />
+                </div>
+                <SkeletonText lines={2} />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Skeleton className="h-[var(--control-md)] w-28 rounded-control" />
+              <Skeleton className="h-[var(--control-md)] w-28 rounded-control" />
+            </div>
+          </Card>
+        </div>
+      </main>
+    </div>
+  )
+}
 
 const checkKeyLabel: Record<BootstrapCheckKey, string> = {
   database: '数据库连接',
@@ -206,20 +263,7 @@ export function SetupWizard() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen flex-col items-center bg-canvas px-4 py-8 text-foreground" role="status">
-        <span className="sr-only">正在读取系统配置状态</span>
-        <div className="flex w-full max-w-form flex-col gap-4" aria-hidden="true">
-          <SkeletonText lines={1} width="200px" />
-          <SkeletonRow cells={3} />
-          <Card className="gap-4">
-            <SkeletonText lines={2} />
-            <SkeletonRow cells={2} />
-            <SkeletonRow cells={2} />
-          </Card>
-        </div>
-      </div>
-    )
+    return <SetupWizardSkeleton />
   }
 
   const checks = status?.bootstrap?.checks ?? []

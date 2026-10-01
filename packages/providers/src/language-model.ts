@@ -169,7 +169,7 @@ function languagePluginFailure(
 
 async function callInstalledLanguageModel(input: LanguageModelInput, pluginId: string, pluginVersion: string): Promise<LanguageModelResult> {
   const config: ProviderConfig = { baseUrl: input.baseUrl, credential: input.credential ?? { schema: 'legacy-api-key-v1', apiKey: input.apiKey }, timeoutMs: input.timeoutMs }
-  const request: LanguageRequest = { vendorModelId: input.vendorModelId, system: input.system, user: input.user, schemaName: input.schemaName, schema: input.schema, maxOutputTokens: input.maxOutputTokens, temperature: input.temperature, reasoningEffort: input.reasoningEffort, timeoutMs: input.timeoutMs }
+  const request: LanguageRequest = { protocol: input.protocol, vendorModelId: input.vendorModelId, system: input.system, user: input.user, schemaName: input.schemaName, schema: input.schema, maxOutputTokens: input.maxOutputTokens, temperature: input.temperature, reasoningEffort: input.reasoningEffort, timeoutMs: input.timeoutMs }
   let result: LanguageCompletionResult
   try {
     const plugin: LanguageProviderPlugin = globalPluginRegistry.getLanguage(pluginId, pluginVersion)
@@ -184,13 +184,35 @@ async function callInstalledLanguageModel(input: LanguageModelInput, pluginId: s
   return { text: result.text, providerReferenceId: result.providerReferenceId, inputTokens: result.inputTokens, outputTokens: result.outputTokens }
 }
 
+/**
+ * Built-in language plugins: the three wire protocols this module speaks natively,
+ * registered under the identities migration 0012 backfilled onto every historical
+ * language model row. Their manifests make the provider account and credential
+ * format declarable like any other plugin's; at call time they keep the native
+ * protocol path below, so requests and error semantics are unchanged.
+ */
+export const BUILTIN_LANGUAGE_PLUGIN_KEYS: readonly string[] = ['openai-language@1.0.0', 'anthropic-language@1.0.0']
+
+export function isBuiltinLanguagePluginKey(pluginId: string | null | undefined, pluginVersion: string | null | undefined): boolean {
+  return !!pluginId && !!pluginVersion && BUILTIN_LANGUAGE_PLUGIN_KEYS.includes(`${pluginId}@${pluginVersion}`)
+}
+
 export async function callLanguageModel(input: LanguageModelInput): Promise<LanguageModelResult> {
-  // Additive dispatch for uploaded language plugins. Without both fields, or when the key
-  // resolves to anything other than a language plugin, control falls through to the
-  // built-in protocol path below unchanged.
-  if (input.pluginId && input.pluginVersion && globalPluginRegistry.kindOf(input.pluginId, input.pluginVersion) === 'language') {
+  // Uploaded language plugins dispatch through their own `complete`. No plugin key,
+  // a built-in key, or a key that is not a registered language plugin all take the
+  // native protocol path.
+  if (
+    input.pluginId && input.pluginVersion
+    && !isBuiltinLanguagePluginKey(input.pluginId, input.pluginVersion)
+    && globalPluginRegistry.kindOf(input.pluginId, input.pluginVersion) === 'language'
+  ) {
     return callInstalledLanguageModel(input, input.pluginId, input.pluginVersion)
   }
+  return callProtocolLanguageModel(input)
+}
+
+/** The native protocol path: openai_chat / openai_responses / anthropic_messages over SafeHttpClient. */
+export async function callProtocolLanguageModel(input: LanguageModelInput): Promise<LanguageModelResult> {
   const request = buildLanguageModelRequest(input)
   // Independent private-address gate on the configured baseUrl host: the per-request
   // allowlist below would otherwise admit that host by construction.

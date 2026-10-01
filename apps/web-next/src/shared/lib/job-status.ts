@@ -7,10 +7,18 @@ export function isJobActive(job: Pick<GenerationJob, 'status'>): boolean {
 }
 
 export interface JobStatusMeta {
+  /** The state in words. Colour is never the only carrier — this label is always
+   *  rendered next to the dot. */
   label: string
-  /** Foreground/background pair. Each combination clears 4.5:1 at 12px, which is
-   *  why `running` uses `text-accent-strong` rather than `text-accent` (3.94:1). */
+  /** Weak-background + strong-foreground pair (`{status}-soft` + `{status}`): the
+   *  badge never wears a solid semantic fill, and certainly not a solid brand
+   *  green. Every pair clears 4.5:1 at 12px in *both* themes — light e.g.
+   *  `text-info` #1e40af on `bg-info-soft` #eff6ff (~8:1), dark e.g. `text-info`
+   *  #60a5fa on `bg-info-soft` #172554 (~6:1), because the tokens invert together.
+   *  `running` uses `text-accent-strong` rather than `text-accent` (3.94:1). */
   badge: string
+  /** The 8px status dot: a graphic, so it only needs 3:1 against the badge's own
+   *  soft background, which every solid here clears. */
   dot: string
 }
 

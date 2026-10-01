@@ -24,12 +24,14 @@ import {
   updateOutputIngestion,
   updateProviderRunState,
   getOutputIngestionByRunIndex,
+  findProviderCredential,
   type ModelConfigRevisionEntity,
   type ProviderRunEntity,
 } from '../../../../packages/database/src/index'
 import {
-  decryptApiKey,
-  decodeCredential,
+  decodeStoredCredential,
+  decryptStoredCredential,
+  hasStoredCredentialSecret,
   type MediaInputImage,
   type MediaProviderPlugin,
   type MediaRequest,
@@ -424,23 +426,15 @@ async function resolveSnapshot(job: Record<string, unknown>): Promise<ResolvedSn
   // row is PROVIDER_NOT_CONFIGURED; an undecryptable envelope is
   // INVALID_CREDENTIAL. The stored encryption_key_id selects the purpose key.
   if (!credentialId) throw new Error('PROVIDER_NOT_CONFIGURED')
-  const cred = await db().query(
-    'SELECT api_key_encrypted, payload_encrypted, encryption_key_id, schema_id, enabled FROM provider_credentials WHERE id=$1 AND deleted_at IS NULL',
-    [credentialId],
-  )
-  const row = cred.rows[0] as Record<string, unknown> | undefined
-  if (!row || !row.enabled) throw new Error('PROVIDER_NOT_CONFIGURED')
-  const envelope = (row.payload_encrypted as string | null) || (row.api_key_encrypted as string | null) || null
-  if (!envelope) throw new Error('PROVIDER_NOT_CONFIGURED')
-  const credentialKeyId = (row.encryption_key_id as string | null) || null
-  const schemaHint = (row.schema_id as string) || undefined
-  let rawCredential: unknown
+  const row = await findProviderCredential(db(), credentialId)
+  if (!row || !row.enabled || !hasStoredCredentialSecret(row)) throw new Error('PROVIDER_NOT_CONFIGURED')
+  let rawCredential: string
   try {
-    rawCredential = decryptApiKey(envelope, credentialKeyId)
+    rawCredential = decryptStoredCredential(row)
   } catch {
     throw new Error('INVALID_CREDENTIAL')
   }
-  const decoded = decodeCredential(rawCredential, schemaHint || 'legacy-api-key-v1', revision.pluginId, revision.pluginVersion)
+  const decoded = decodeStoredCredential(row, rawCredential, revision)
   const baseUrl = revision.baseUrl || (job.provider_base_url as string | undefined) || undefined
   const normalized = revision.normalizedConfig || {}
   // Provider timeout and output cap resolve from runtime settings (DB first,

@@ -82,7 +82,9 @@ function createFakeDb(init: { history?: HistoryRow[]; tables?: string[] } = {}) 
         bufferWrite(() => { if (!markers.includes(key)) markers.push(key) })
       }
       for (const match of text.matchAll(/CREATE TABLE IF NOT EXISTS ([a-z_]+)/g)) tables.add(match[1])
-      if (/RAISE EXCEPTION/.test(text)) {
+      // Only the fixture's own failure: real migrations may carry guarded RAISEs
+      // that never fire against this fake's empty tables.
+      if (/RAISE EXCEPTION 'injected failure'/.test(text)) {
         throw Object.assign(new Error('injected failure'), { code: 'P0001' })
       }
       return { rows: [] }
@@ -205,7 +207,7 @@ test('a failing migration rolls back its own file and stops the run', async () =
 })
 
 test('a recorded migration whose file has vanished is a hard failure', async () => {
-  const db = createFakeDb({ history: [{ version: '0027', name: 'invented', checksum: 'x'.repeat(64), kind: 'sequential' }] })
+  const db = createFakeDb({ history: [{ version: '9999', name: 'invented', checksum: 'x'.repeat(64), kind: 'sequential' }] })
   const error = await runMigrations({ pool: db.pool }).catch((caught: unknown) => caught)
   assert.ok(error instanceof MigrationValidationError, 'a deleted applied migration must refuse to boot')
   assert.match(error.message, /must never be deleted or renamed/)

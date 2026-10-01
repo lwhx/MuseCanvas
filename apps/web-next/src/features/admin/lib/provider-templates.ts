@@ -9,17 +9,17 @@ import type {
 } from '@/shared/types'
 
 /**
- * Legacy (plugin-less) adapter options, split by the page that creates them.
- * The API only accepts these three adapter strings without a plugin identity
- * (see `LEGACY_ADAPTERS` in `apps/api/src/modules/admin/provider-credentials.ts`).
+ * Provider accounts a credential can be created for without a plugin template,
+ * split by the page that creates them. Values are provider ids (Seedream's Ark
+ * account lives under 'volcengine', shared with Seedance).
  */
-export const LEGACY_ADAPTER_OPTIONS: Record<
+export const CUSTOM_PROVIDER_OPTIONS: Record<
   'media' | 'language',
   readonly { value: string; label: string }[]
 > = {
   media: [
     { value: 'openai', label: 'OpenAI 兼容' },
-    { value: 'seedream', label: 'Seedream (火山引擎)' },
+    { value: 'volcengine', label: 'Seedream（火山引擎）' },
   ],
   language: [
     { value: 'openai', label: 'OpenAI 兼容' },
@@ -27,53 +27,63 @@ export const LEGACY_ADAPTER_OPTIONS: Record<
   ],
 }
 
+function hostOf(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Mirrors the API's binding rule (`credentialBindingError`) as far as the browser
+ * can see it: same provider account, and for a `fixed` endpoint policy no foreign
+ * host. Allowlists are not shipped to the browser, so `allowlisted` endpoints are
+ * left for the API to judge on save.
+ */
+export function credentialFitsTemplate(
+  credential: Pick<ProviderCredential, 'providerId' | 'baseUrl'>,
+  template: Pick<BuiltinProviderTemplate, 'providerId' | 'baseUrl' | 'credential'>,
+): boolean {
+  if (credential.providerId !== template.providerId) return false
+  if (template.credential.baseUrlPolicy !== 'fixed' || !credential.baseUrl) return true
+  return hostOf(credential.baseUrl) === hostOf(template.baseUrl)
+}
+
+/** Credentials that can back models of this template's plugin. */
 export function templateConfiguredCount(
   credentials: ProviderCredential[],
   template: BuiltinProviderTemplate,
 ): number {
-  return credentials.filter(
-    (c) =>
-      c.configuredFields?.pluginId === template.pluginId &&
-      c.configuredFields?.pluginVersion === template.pluginVersion,
-  ).length
+  return credentials.filter((c) => credentialFitsTemplate(c, template)).length
 }
 
 /**
- * Credentials selectable for a preset. Built-in presets (exact plugin
- * identity) match enabled credentials by configuredFields.pluginId +
- * pluginVersion first; providerId fallback applies only to legacy records
- * without a configured plugin identity. Presets without plugin identity
- * (language/custom) keep the legacy adapter match. Video presets carry no
- * adapter, so they must never be filtered by adapter comparison.
+ * Credentials selectable for a preset. A credential belongs to a provider
+ * account, not to a plugin version, so plugin presets match by provider (plus
+ * the template's endpoint policy when the template is known). Language presets
+ * match by the protocol vendor among the plugin-less credentials.
  */
 export function credentialsForPreset(
   credentials: ProviderCredential[],
   preset: Pick<ModelPreset, 'adapter' | 'providerId' | 'pluginId' | 'pluginVersion' | 'modelKind'> | null | undefined,
+  template?: Pick<BuiltinProviderTemplate, 'providerId' | 'baseUrl' | 'credential'> | null,
 ): ProviderCredential[] {
   if (!preset) return []
-  const enabled = credentials.filter((c) => c.enabled)
+  const enabled = credentials.filter((c) => c.enabled && (c.hasCredential ?? c.hasApiKey))
   if (preset.pluginId && preset.pluginVersion) {
-    const exact = enabled.filter(
-      (c) =>
-        c.configuredFields?.pluginId === preset.pluginId &&
-        c.configuredFields?.pluginVersion === preset.pluginVersion,
-    )
-    if (exact.length > 0) return exact
-    if (preset.providerId) {
-      return enabled.filter(
-        (c) => !(c.configuredFields?.pluginId && c.configuredFields?.pluginVersion) && c.providerId === preset.providerId,
-      )
-    }
-    return []
+    if (template) return enabled.filter((c) => credentialFitsTemplate(c, template))
+    return preset.providerId ? enabled.filter((c) => c.providerId === preset.providerId) : []
   }
   if (preset.modelKind === 'language') {
-    // Language presets have no plugin identity, so plugin-bound media
-    // credentials (which merely share an adapter string) are never candidates.
+    // Plugin-bound media credentials are never offered here, even when they share
+    // the provider account: the language page manages its own keys.
     return enabled.filter(
-      (c) => c.adapter === preset.adapter && c.hasApiKey && !isPluginBoundCredential(c),
+      (c) => (c.providerId ?? c.adapter) === preset.adapter && !isPluginBoundCredential(c),
     )
   }
-  return enabled.filter((c) => c.adapter === preset.adapter)
+  return []
 }
 
 /** Exact plugin key shown for built-in presets (e.g. `veo-video@1.0.0`). */
@@ -84,7 +94,7 @@ export function presetPluginKey(
   return `${preset.pluginId}@${preset.pluginVersion}`
 }
 
-/** Exact plugin identity a credential is bound to, or null when plugin-less. */
+/** The template plugin a credential was created from, or null when created without one. */
 export function credentialPluginKey(
   credential: Pick<ProviderCredential, 'configuredFields'>,
 ): string | null {
@@ -96,8 +106,8 @@ export function credentialPluginKey(
 }
 
 /**
- * Media credentials are the plugin-bound ones: only they can pass the provider
- * plugin probe in `testProviderCredential`.
+ * Media credentials are the ones created from a plugin template; that template is
+ * also what an unlinked credential's connectivity test probes.
  */
 export function isPluginBoundCredential(
   credential: Pick<ProviderCredential, 'configuredFields'>,
@@ -106,9 +116,9 @@ export function isPluginBoundCredential(
 }
 
 /**
- * Language / custom credentials carry no plugin identity (`adapter` + API key +
- * base URL). This is the only shape a language preset can bind, because
- * `credentialsForPreset` matches language presets by adapter, never by plugin.
+ * Language / custom credentials were created without a plugin template (provider
+ * account + API key + optional endpoint). The language page lists exactly these,
+ * and `credentialsForPreset` offers only these to language presets.
  */
 export function isCustomCredential(
   credential: Pick<ProviderCredential, 'configuredFields'>,
@@ -116,7 +126,11 @@ export function isCustomCredential(
   return !isPluginBoundCredential(credential)
 }
 
-/** Exact identity/schema payload for creating a credential from a template. */
+/**
+ * Payload for creating a credential from a template. The template's plugin is
+ * named so the API validates against its declared contract; the endpoint is left
+ * out so the plugin's declared default applies.
+ */
 export function buildTemplateCredentialInput(
   template: BuiltinProviderTemplate,
   secret: string | Record<string, unknown>,
@@ -124,16 +138,32 @@ export function buildTemplateCredentialInput(
 ): ProviderCredentialInput {
   return {
     displayName: (displayName || '').trim() || template.displayName,
-    adapter: template.adapter,
     providerId: template.providerId,
     pluginId: template.pluginId,
     pluginVersion: template.pluginVersion,
     schemaId: template.credential.schemaId,
     schemaVersion: template.credential.schemaVersion,
-    baseUrl: template.baseUrl,
-    credential: secret,
+    secret,
     enabled: true,
   }
+}
+
+/** A pasted JSON credential must be one JSON object; the plugin checks its fields server-side. */
+export function parseJsonSecret(
+  raw: string,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const text = (raw || '').trim()
+  if (!text) return { ok: false, error: '请粘贴凭据 JSON' }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { ok: false, error: '凭据不是合法 JSON' }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, error: '凭据 JSON 必须是 JSON 对象' }
+  }
+  return { ok: true, value: parsed as Record<string, unknown> }
 }
 
 export function parseServiceAccountJson(

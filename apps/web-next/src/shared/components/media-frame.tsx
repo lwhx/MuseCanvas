@@ -39,10 +39,13 @@ export interface MediaFrameProps {
 }
 
 /** Media element classes for still images. `tile`/`thumb` mirror the library grid
- *  and the console history rail; `stage` mirrors the console result grid. */
+ *  and the console history rail; `stage` mirrors the console result grid. No hover
+ *  transform: a card or tile that grows under the pointer is off-spec, so the tile
+ *  reports hover with the overlay below instead, and `motion-hover-fade` (120ms)
+ *  is the only timing used. */
 const IMAGE_CLASS: Record<MediaFrameLayout, string> = {
-  tile: 'aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105',
-  stage: 'h-auto w-full object-cover transition-transform duration-300 group-hover:scale-105',
+  tile: 'aspect-square w-full object-cover',
+  stage: 'h-auto w-full object-cover',
   thumb: 'h-full w-full object-cover',
 }
 
@@ -66,9 +69,14 @@ const WRAPPER_CLASS: Record<MediaFrameLayout, string> = {
 /** Chip placement: a 48px rail box cannot fit a floated pill, so there the scrim
  *  becomes a full-width bar pinned to the bottom edge. */
 const CHIP_CLASS: Record<'tile' | 'thumb', string> = {
-  tile: 'bottom-1 left-1 gap-1 rounded-[var(--radius-control)] px-1.5 py-0.5',
+  tile: 'bottom-1 left-1 gap-1 rounded-control px-1.5 py-0.5',
   thumb: 'inset-x-0 bottom-0 gap-0.5 rounded-none px-1 py-px',
 }
+
+/** Neutral hover wash for a tile: `--color-overlay` at `--opacity-ghost-hover`
+ *  (6% light, 8% dark). A color-mix rather than an `opacity` utility, because the
+ *  overlay element itself animates `opacity` on hover. */
+const HOVER_TINT = 'color-mix(in srgb, var(--color-overlay) calc(var(--opacity-ghost-hover) * 100%), transparent)'
 
 /**
  * `assets.poster_object_key` now has a writer (the worker derives a ~512px JPEG
@@ -200,8 +208,9 @@ export function MediaFrame({
   const mediaClass = `${className ?? (isVideo ? VIDEO_CLASS.tile : IMAGE_CLASS.tile)} ${
     phase === 'ready' ? 'motion-fade-in' : ''
   }`
+  const busy = phase === 'loading' || phase === 'retrying'
   // A painted poster already fills the box, so the skeleton would only hide it.
-  const showSkeleton = (phase === 'loading' || phase === 'retrying') && !poster
+  const showSkeleton = busy && !poster
 
   // Layout-shift reservation: the box the skeleton covers and the box the media
   // finally paints must be the same. `tile` stays on the forced `aspect-square`
@@ -235,13 +244,22 @@ export function MediaFrame({
   )
 
   return (
-    <div className={WRAPPER_CLASS.tile}>
+    <div className={WRAPPER_CLASS.tile} aria-busy={busy}>
       {media}
+      {/* Hover feedback without motion: the tile darkens by the neutral hover
+          opacity instead of lifting or scaling, on `motion-hover-fade` (120ms). */}
+      <span
+        aria-hidden="true"
+        style={{ backgroundColor: HOVER_TINT }}
+        className="motion-hover-fade pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+      />
       {showSkeleton ? <span aria-hidden="true" className="motion-shimmer absolute inset-0" /> : null}
       {phase === 'failed' ? (
-        // Static, no animation: reduced motion must stay legible.
-        <span className="absolute inset-0 flex items-center justify-center bg-surface-subtle">
-          <ImageOff aria-hidden="true" className="h-4 w-4 text-muted-foreground/50" />
+        // Static, no animation: reduced motion must stay legible. The glyph sits on
+        // the full muted foreground (5.8:1 on white), not a 50% wash — a 3:1 graphic
+        // has to survive as the only clue that this cell is broken.
+        <span className="absolute inset-0 flex items-center justify-center bg-tonal">
+          <ImageOff aria-hidden="true" className="h-[var(--icon-lg)] w-[var(--icon-lg)] text-muted-foreground" />
           <span className="sr-only">预览加载失败</span>
         </span>
       ) : null}

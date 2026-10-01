@@ -169,6 +169,26 @@ test('a built-in plugin key is refused before the catalog is consulted', async (
   assert.equal(await errorCode(response), 'PLUGIN_ID_RESERVED')
 })
 
+test('an upload may not claim a built-in provider account', async () => {
+  // Declared explicitly...
+  const declared = {
+    ...GOOD_MANIFEST,
+    credential: {
+      providerId: 'openai',
+      schemaId: 'legacy-api-key-v1',
+      secret: { format: 'text', label: 'Key' },
+      baseUrl: { policy: 'allowlisted' },
+    },
+  }
+  const response = await installPlugin(ADMIN, packageRequest(uploadFields(declared)))
+  assert.equal(response.status, 400)
+  assert.equal(await errorCode(response), 'PROVIDER_ID_RESERVED')
+  // ...or derived from a plugin id that happens to name one.
+  const derived = { ...GOOD_MANIFEST, id: 'volcengine' }
+  const derivedResponse = await installPlugin(ADMIN, packageRequest(uploadFields(derived)))
+  assert.equal(await errorCode(derivedResponse), 'PROVIDER_ID_RESERVED')
+})
+
 test('uploads are refused while ALLOW_PLUGIN_UPLOAD is off', async () => {
   for (const value of [undefined, 'false', 'TRUE']) {
     if (value === undefined) delete process.env.ALLOW_PLUGIN_UPLOAD
@@ -308,7 +328,7 @@ test('synthesized presets carry the manifest identity and the first exact host a
   assert.equal(presets.some(preset => 'pluginId' in preset && preset.pluginId === 'acme-language'), false)
 })
 
-test('host allowlist matching covers exact and *.suffix entries only', () => {
+test('host allowlist matching follows the runtime egress grammar', () => {
   const manifest = {
     kind: 'media',
     id: 'acme-image',
@@ -322,7 +342,9 @@ test('host allowlist matching covers exact and *.suffix entries only', () => {
   assert.equal(manifestAllowsHost(manifest, 'api.acme.example'), true)
   assert.equal(manifestAllowsHost(manifest, 'API.acme.example'), true)
   assert.equal(manifestAllowsHost(manifest, 'a.mirror.acme.example'), true)
-  assert.equal(manifestAllowsHost(manifest, 'mirror.acme.example'), true)
+  // The apex is not covered by `*.`: SafeHttpClient would refuse it at call time,
+  // so accepting it on save would store a base URL that can never be called.
+  assert.equal(manifestAllowsHost(manifest, 'mirror.acme.example'), false)
   assert.equal(manifestAllowsHost(manifest, 'evil.acme.example'), false)
   assert.equal(manifestAllowsHost(manifest, 'api.acme.example.evil.net'), false)
 })

@@ -8,13 +8,13 @@ import {
 } from '../../../../packages/providers/src/index'
 import type { MediaProviderPlugin } from '../../../../packages/providers/src/index'
 import {
-  assertBuiltinMediaPluginsAvailable,
-  builtinMediaKeys,
+  assertBuiltinPluginsAvailable,
+  builtinPluginKeys,
   createMediaExecutionContext,
   forgetPluginStatus,
   installedActiveCount,
   installedLanguagePluginBinding,
-  isBuiltinMediaKey,
+  isBuiltinPluginKey,
   isPluginAvailable,
   resetPluginAvailability,
   resolveLanguagePlugin,
@@ -67,7 +67,7 @@ function assertNotConfigured(error: unknown, detail?: RegExp): NormalizedProvide
   return error
 }
 
-test('built-in media keys always resolve active through the gate', () => {
+test('built-in keys always resolve active through the gate', () => {
   const expected = [
     'openai-image@1.0.0',
     'openai-image@1.1.0',
@@ -77,13 +77,19 @@ test('built-in media keys always resolve active through the gate', () => {
     'veo-video@1.0.0',
   ]
   const registered: string[] = globalProviderRegistry.listManifests().map(m => formatPluginKey(m.id, m.version)).sort()
-  // The gate's snapshot is the registry taken before any artifact loads.
-  assert.deepEqual([...builtinMediaKeys()].sort(), registered)
-  assert.equal(assertBuiltinMediaPluginsAvailable(), registered.length)
+  // The gate's snapshot is the registry taken before any artifact loads: every
+  // shipped media key plus the native language protocols.
+  assert.deepEqual([...builtinPluginKeys()].sort(), [...registered, 'anthropic-language@1.0.0', 'openai-language@1.0.0'].sort())
+  assert.equal(assertBuiltinPluginsAvailable(), registered.length + 2)
+  for (const key of ['openai-language@1.0.0', 'anthropic-language@1.0.0']) {
+    const [id, version] = key.split('@')
+    assert.equal(isBuiltinPluginKey(id, version), true, `${key} is a built-in`)
+    assert.equal(resolveLanguagePlugin(id, version).manifest.id, id)
+  }
   for (const key of expected) assert.ok(registered.includes(key), `expected built-in ${key}`)
   for (const key of registered) {
     const [id, version] = key.split('@')
-    assert.equal(isBuiltinMediaKey(id, version), true, `${key} is a built-in`)
+    assert.equal(isBuiltinPluginKey(id, version), true, `${key} is a built-in`)
     assert.equal(isPluginAvailable(id, version), true, `${key} is available with no catalog row`)
     assert.equal(resolveMediaPlugin(id, version).manifest.id, id)
     const context = createMediaExecutionContext(id, version, {})
@@ -171,12 +177,15 @@ test('language gating keys off registry membership, not the plugin_id column', (
     apiKey: 'sk-test-credential',
   })), /is disabled/)
 
-  // migrate.ts backfills model_configs.plugin_id onto every row with ids registered
-  // nowhere; those must keep the built-in protocol payload byte-identical.
-  for (const orphan of ['openai-language', 'anthropic-language', 'seedream-language']) {
-    assert.equal(globalPluginRegistry.kindOf(orphan, TEST_VERSION), undefined)
-    assert.equal(installedLanguagePluginBinding({ pluginId: orphan, pluginVersion: TEST_VERSION, apiKey: 'k' }), undefined)
+  // Migration 0012 backfilled model_configs.plugin_id onto every language row. The
+  // two common ids are the built-in protocol plugins; anything else it produced is
+  // registered nowhere. Both must keep the native protocol payload byte-identical.
+  for (const builtin of ['openai-language', 'anthropic-language']) {
+    assert.equal(globalPluginRegistry.kindOf(builtin, '1.0.0'), 'language')
+    assert.equal(installedLanguagePluginBinding({ pluginId: builtin, pluginVersion: '1.0.0', apiKey: 'k' }), undefined)
   }
+  assert.equal(globalPluginRegistry.kindOf('seedream-language', '1.0.0'), undefined)
+  assert.equal(installedLanguagePluginBinding({ pluginId: 'seedream-language', pluginVersion: '1.0.0', apiKey: 'k' }), undefined)
   assert.equal(installedLanguagePluginBinding({ pluginId: TEST_MEDIA_ID, pluginVersion: TEST_VERSION, apiKey: 'k' }), undefined)
   assert.equal(installedLanguagePluginBinding({ pluginId: null, pluginVersion: null, apiKey: 'k' }), undefined)
   resetPluginAvailability()

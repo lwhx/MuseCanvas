@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { NextResponse } from 'next/server'
-import { db, transaction } from '../../../../../packages/database/src/index'
+import { db, findProviderCredential, transaction } from '../../../../../packages/database/src/index'
+import { hasStoredCredentialSecret } from '../../../../../packages/providers/src/index'
 import { validateGenerationRequest, prepareRequestDigestInput } from '@musecanvas/domain'
 import {
   RUNTIME_SETTINGS_DEFAULTS,
@@ -199,24 +200,24 @@ export async function createGenerationJob(cmd: CreateGenerationJobCommand): Prom
 
       let credId: string | null = null; let credName: string | null = null; let providerBaseUrl = lockedModel.base_url
       if (lockedModel.provider_credential_id) {
-        const cred = await client.query('SELECT id, display_name, enabled, api_key_encrypted, payload_encrypted, base_url FROM provider_credentials WHERE id=$1 AND deleted_at IS NULL', [lockedModel.provider_credential_id])
-        if (!cred.rows[0] || !cred.rows[0].enabled || (!cred.rows[0].api_key_encrypted && !cred.rows[0].payload_encrypted)) throw new Error('PROVIDER_NOT_CONFIGURED')
-        credId = cred.rows[0].id
-        credName = cred.rows[0].display_name
-        providerBaseUrl = cred.rows[0].base_url || lockedModel.base_url
+        const cred = await findProviderCredential(client, lockedModel.provider_credential_id)
+        if (!cred || !cred.enabled || !hasStoredCredentialSecret(cred)) throw new Error('PROVIDER_NOT_CONFIGURED')
+        credId = cred.id
+        credName = cred.display_name
+        providerBaseUrl = cred.base_url || lockedModel.base_url
       }
 
       let optSettings = optRow
       if (optRow.enabled) {
         const fullOpt = await client.query(
-          `SELECT s.*,m.display_name,m.vendor_model_id,m.adapter,m.language_protocol,m.max_output_tokens,m.temperature,m.reasoning_effort,m.base_url,pc.id credential_id,pc.display_name credential_name,pc.base_url credential_base_url,pc.enabled credential_enabled,COALESCE(NULLIF(pc.payload_encrypted,''),pc.api_key_encrypted) api_key_encrypted
+          `SELECT s.*,m.display_name,m.vendor_model_id,m.adapter,m.language_protocol,m.max_output_tokens,m.temperature,m.reasoning_effort,m.base_url,pc.id credential_id,pc.display_name credential_name,pc.base_url credential_base_url,pc.enabled credential_enabled,pc.payload_encrypted,pc.api_key_encrypted
            FROM prompt_optimization_settings s
            LEFT JOIN model_configs m ON m.id=s.language_model_config_id AND m.deleted_at IS NULL
            LEFT JOIN provider_credentials pc ON pc.id=m.provider_credential_id AND pc.deleted_at IS NULL
            WHERE s.singleton=true`
         )
         optSettings = fullOpt.rows[0]
-        if (!optSettings || !optSettings.language_model_config_id || !optSettings.language_protocol || !optSettings.credential_id || !optSettings.credential_enabled || !optSettings.api_key_encrypted) {
+        if (!optSettings || !optSettings.language_model_config_id || !optSettings.language_protocol || !optSettings.credential_id || !optSettings.credential_enabled || !hasStoredCredentialSecret(optSettings)) {
           throw new Error('PROMPT_MODEL_NOT_CONFIGURED')
         }
       }

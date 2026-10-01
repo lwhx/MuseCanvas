@@ -6,12 +6,21 @@ import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { BuiltinProviderTemplate, ProviderCredentialInput } from '@/shared/types'
 import {
-  LEGACY_ADAPTER_OPTIONS,
+  CUSTOM_PROVIDER_OPTIONS,
   buildTemplateCredentialInput,
+  parseJsonSecret,
   parseServiceAccountJson,
 } from '../lib/provider-templates'
-import { Loader2 } from 'lucide-react'
-import { Dialog } from '@/shared/components/ui/dialog'
+import {
+  Alert,
+  Button,
+  Dialog,
+  FieldGroup,
+  FormField,
+  Input,
+  Select,
+  Textarea,
+} from '@/shared/components/ui'
 
 interface AdminProviderCredentialDialogProps {
   open: boolean
@@ -20,15 +29,43 @@ interface AdminProviderCredentialDialogProps {
   /** When set, the dialog is pinned to this plugin and hides both pickers. */
   lockedTemplate?: BuiltinProviderTemplate | null
   /**
-   * Which credential family the dialog creates. `media` offers plugin-backed
-   * credentials (plus legacy media adapters); `language` is the plugin-less
-   * adapter + API key shape that language models bind to.
+   * Which credential family the dialog creates. `media` offers template-validated
+   * credentials (plus custom media provider accounts); `language` is the
+   * provider + API key shape that language models bind to.
    */
   scope?: 'media' | 'language'
 }
 
-// Legacy (plugin-less) credentials remain the path for language models and
-// custom endpoints; the API rejects any other adapter without plugin identity.
+type Mode = 'template' | 'legacy'
+
+/** Fields whose local validation failed; each message renders inside its `FormField`. */
+type FieldKey = 'template' | 'displayName' | 'apiKey' | 'serviceAccount'
+type FieldErrors = Partial<Record<FieldKey, string>>
+
+/** A validation failure that belongs to one input, not to the dialog as a whole. */
+interface FieldValidationError extends Error {
+  field: FieldKey
+}
+
+function validationError(field: FieldKey, message: string): FieldValidationError {
+  return Object.assign(new Error(message) as FieldValidationError, { field })
+}
+
+const MODE_OPTIONS: { value: Mode; label: string; hint: string }[] = [
+  { value: 'template', label: '内置插件', hint: '按插件声明的格式与端点校验，可通过连通测试。' },
+  { value: 'legacy', label: '自定义凭据', hint: '只选择供应商账号，可填写兼容端点。' },
+]
+
+// Credentials belong to a provider account. A template names the plugin whose
+// declared contract validates the secret; custom credentials name only the account
+// (language models and compatible endpoints), and the API checks them against
+// every plugin of that account.
+const ENDPOINT_POLICY_LABEL: Record<BuiltinProviderTemplate['credential']['baseUrlPolicy'], string> = {
+  fixed: '仅官方端点',
+  allowlisted: '插件允许的域名',
+  'any-https': '任意 HTTPS 端点',
+}
+
 export function AdminProviderCredentialDialog({
   open,
   onClose,
@@ -37,21 +74,26 @@ export function AdminProviderCredentialDialog({
   scope = 'media',
 }: AdminProviderCredentialDialogProps) {
   const queryClient = useQueryClient()
-  const [mode, setMode] = useState<'template' | 'legacy'>(scope === 'language' ? 'legacy' : 'template')
+  const [mode, setMode] = useState<Mode>(scope === 'language' ? 'legacy' : 'template')
   const [templateKey, setTemplateKey] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [serviceAccountRaw, setServiceAccountRaw] = useState('')
-  const [adapter, setAdapter] = useState(LEGACY_ADAPTER_OPTIONS[scope][0].value)
+  const [customProvider, setCustomProvider] = useState(CUSTOM_PROVIDER_OPTIONS[scope][0].value)
   const [baseUrl, setBaseUrl] = useState('')
   const [actionError, setActionError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
-  const legacyAdapters = LEGACY_ADAPTER_OPTIONS[scope]
+  const customProviders = CUSTOM_PROVIDER_OPTIONS[scope]
   const template = scope === 'language'
     ? null
     : lockedTemplate ?? templates.find((t) => t.key === templateKey) ?? null
-  const effectiveMode = scope === 'language' ? 'legacy' : (lockedTemplate ? 'template' : mode)
-  const useServiceAccount = template?.credential.kind === 'google_service_account'
+  const effectiveMode: Mode = scope === 'language' ? 'legacy' : (lockedTemplate ? 'template' : mode)
+  const useJsonSecret = template?.credential.format === 'json'
+
+  function clearFieldError(field: FieldKey) {
+    setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
+  }
 
   const resetFields = () => {
     setDisplayName('')
@@ -59,25 +101,32 @@ export function AdminProviderCredentialDialog({
     setServiceAccountRaw('')
     setBaseUrl('')
     setActionError('')
+    setFieldErrors({})
   }
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      setFieldErrors({})
+      setActionError('')
       let body: ProviderCredentialInput
       if (effectiveMode === 'template') {
-        if (!template) throw new Error('请选择媒体插件')
-        if (template.credential.kind === 'google_service_account') {
-          const parsed = parseServiceAccountJson(serviceAccountRaw)
-          if (!parsed.ok) throw new Error(parsed.error)
+        if (!template) throw validationError('template', '请选择媒体插件。')
+        if (template.credential.format === 'json') {
+          // Google's service-account fields are known here; any other JSON
+          // credential is checked by its plugin's declared contract on save.
+          const parsed = template.providerId === 'google'
+            ? parseServiceAccountJson(serviceAccountRaw)
+            : parseJsonSecret(serviceAccountRaw)
+          if (!parsed.ok) throw validationError('serviceAccount', parsed.error)
           body = buildTemplateCredentialInput(template, parsed.value, displayName)
         } else {
-          if (!apiKey.trim()) throw new Error('请输入 API Key')
+          if (!apiKey.trim()) throw validationError('apiKey', '请输入 API Key。')
           body = buildTemplateCredentialInput(template, apiKey.trim(), displayName)
         }
       } else {
-        if (!displayName.trim()) throw new Error('请输入凭据显示名称')
-        if (!apiKey.trim()) throw new Error('请输入 API Key')
-        body = { displayName: displayName.trim(), adapter, baseUrl: baseUrl.trim() || undefined, apiKey: apiKey.trim(), enabled: true }
+        if (!displayName.trim()) throw validationError('displayName', '请输入凭据显示名称。')
+        if (!apiKey.trim()) throw validationError('apiKey', '请输入 API Key。')
+        body = { displayName: displayName.trim(), providerId: customProvider, baseUrl: baseUrl.trim() || undefined, secret: apiKey.trim(), enabled: true }
       }
       const res = await api(API_ENDPOINTS.admin.providerCredentials, { method: 'POST', body })
       if (!res.success) throw new Error(res.error?.message || '创建凭据失败')
@@ -89,9 +138,21 @@ export function AdminProviderCredentialDialog({
       queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
     },
     onError: (err: Error) => {
+      const fieldError = err as Partial<FieldValidationError>
+      if (fieldError.field) {
+        // Inline only: the field says what is missing, so no dialog-level banner.
+        const field = fieldError.field
+        setFieldErrors((prev) => ({ ...prev, [field]: err.message }))
+        setActionError('')
+        return
+      }
       setActionError(err.message || '创建凭据失败')
     },
   })
+
+  const credentialFieldLabel = useJsonSecret
+    ? template?.credential.label
+    : (template?.credential.label ?? 'API Key')
 
   return (
     <Dialog
@@ -104,55 +165,75 @@ export function AdminProviderCredentialDialog({
             ? '创建语言模型凭据'
             : '创建自定义凭据'
       }
-      panelClassName="max-w-md"
+      panelClassName="max-w-form"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            loading={createMutation.isPending}
+            disabled={effectiveMode === 'template' && !template}
+            onClick={() => createMutation.mutate()}
+          >
+            保存凭据
+          </Button>
+        </>
+      }
     >
-      <div className="mt-4 space-y-4">
+      <div className="flex flex-col gap-6">
         {actionError && (
-          <div className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
-            {actionError}
-          </div>
+          <Alert tone="danger" role="alert" title="无法创建凭据">
+            {actionError}。请核对填写内容与供应商配置后重试；密钥无效时请重新获取 API Key。
+          </Alert>
         )}
 
         {scope === 'media' && !lockedTemplate && (
-          <div className="flex gap-1 rounded-[var(--radius-control)] bg-surface-subtle p-1" role="group" aria-label="凭据类型">
-            <button
-              type="button"
-              onClick={() => setMode('template')}
-              aria-pressed={effectiveMode === 'template'}
-              className={`flex-1 rounded-[var(--radius-control)] px-3 py-1.5 text-xs font-medium transition-colors ${
-                effectiveMode === 'template'
-                  ? 'bg-surface text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              内置插件
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('legacy')}
-              aria-pressed={effectiveMode === 'legacy'}
-              className={`flex-1 rounded-[var(--radius-control)] px-3 py-1.5 text-xs font-medium transition-colors ${
-                effectiveMode === 'legacy'
-                  ? 'bg-surface text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              自定义凭据
-            </button>
-          </div>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-sm font-medium text-foreground">凭据类型</legend>
+            {/* Native radios + `accent-color`: keyboard, form semantics and the
+                selected state come from the platform, not from aria-pressed. */}
+            <div className="flex flex-wrap gap-2">
+              {MODE_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className="flex min-h-[var(--control-md)] flex-1 cursor-pointer items-start gap-2 rounded-control px-3 py-1.5 text-sm text-foreground transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-tonal-hover"
+                >
+                  <input
+                    type="radio"
+                    name="credential-mode"
+                    value={option.value}
+                    checked={effectiveMode === option.value}
+                    onChange={() => {
+                      setMode(option.value)
+                      setActionError('')
+                    }}
+                    className="mt-1 h-5 w-5 shrink-0 accent-primary"
+                  />
+                  <span className="flex flex-col">
+                    <span className="font-medium">{option.label}</span>
+                    <span className="text-xs text-muted-foreground">{option.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         )}
 
-        <div className="space-y-3">
+        <FieldGroup>
           {effectiveMode === 'template' && !lockedTemplate && (
-            <div>
-              <label htmlFor="credential-template" className="mb-1 block text-xs font-medium text-foreground">
-                媒体插件
-              </label>
-              <select
-                id="credential-template"
+            <FormField
+              label="媒体插件"
+              required
+              error={fieldErrors.template}
+              hint="凭据按所选插件声明的格式与端点校验；同一供应商账号下的其它插件也可以使用。"
+            >
+              <Select
                 value={templateKey}
-                onChange={(e) => setTemplateKey(e.target.value)}
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
+                onChange={(e) => {
+                  setTemplateKey(e.target.value)
+                  clearFieldError('template')
+                }}
               >
                 <option value="">请选择插件</option>
                 {templates.map((t) => (
@@ -160,154 +241,167 @@ export function AdminProviderCredentialDialog({
                     {t.displayName} · {t.pluginId}@{t.pluginVersion} · {t.modality === 'video' ? '视频' : '图像'}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </FormField>
           )}
 
           {effectiveMode === 'template' && template && (
-            <div className="rounded-[var(--radius-control)] bg-surface-subtle p-3 text-[11px] text-muted-foreground">
+            <div className="flex flex-col gap-1 rounded-control bg-tonal p-3 text-xs text-muted-foreground">
               <div className="font-mono text-foreground">
                 {template.pluginId}@{template.pluginVersion}
               </div>
-              <div>供应商 {template.providerId} · 凭据 {template.credential.schemaId}@{template.credential.schemaVersion}</div>
+              <div>
+                供应商 {template.providerId} · 凭据 {template.credential.schemaId}@{template.credential.schemaVersion}
+              </div>
               <div className="break-all font-mono">{template.baseUrl}</div>
+              <div>端点策略：{ENDPOINT_POLICY_LABEL[template.credential.baseUrlPolicy]}</div>
             </div>
           )}
 
           {effectiveMode === 'legacy' && (
-            <>
+            <div className="rounded-control bg-tonal p-3 text-xs text-muted-foreground">
               {scope === 'language' ? (
-                <p className="rounded-[var(--radius-control)] bg-surface-subtle p-3 text-[11px] text-muted-foreground">
-                  语言模型不使用供应商插件，凭据按 <span className="font-mono text-foreground">适配协议 + API Key</span> 与语言模型绑定。
-                </p>
+                <>
+                  语言模型凭据由{' '}
+                  <span className="font-mono text-foreground">供应商 + API Key</span> 组成，可填写兼容端点。
+                </>
               ) : (
-                <p className="rounded-[var(--radius-control)] bg-surface-subtle p-3 text-[11px] text-muted-foreground">
-                  自定义凭据不绑定插件身份，因此无法通过媒体凭据的连通测试；此类凭据列在
+                <>
+                  自定义凭据不经插件模板校验，关联模型后可借该模型的插件做连通测试；此类凭据列在
                   <span className="font-mono text-foreground">语言模型</span>
                   页的凭据列表中。
-                </p>
+                </>
               )}
-              <div>
-                <label htmlFor="credential-name" className="mb-1 block text-xs font-medium text-foreground">显示名称</label>
-                <input
-                  id="credential-name"
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder={scope === 'language' ? '例如: Anthropic 语言模型凭据' : '例如: 自建 OpenAI 兼容端点'}
-                  className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="credential-adapter" className="mb-1 block text-xs font-medium text-foreground">适配协议</label>
-                <select
-                  id="credential-adapter"
-                  value={adapter}
-                  onChange={(e) => setAdapter(e.target.value)}
-                  className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-                >
-                  {legacyAdapters.map((a) => (
-                    <option key={a.value} value={a.value}>{a.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="credential-base-url" className="mb-1 block text-xs font-medium text-foreground">Base URL (可选)</label>
-                <input
-                  id="credential-base-url"
-                  type="text"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.openai.com/v1"
-                  className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
-                />
-              </div>
-            </>
+            </div>
+          )}
+
+          {effectiveMode === 'legacy' && (
+            <FormField
+              label="显示名称"
+              required
+              error={fieldErrors.displayName}
+              hint="用于在模型配置中标识该凭据，例如供应商或用途。"
+            >
+              <Input
+                type="text"
+                value={displayName}
+                onChange={(e) => {
+                  setDisplayName(e.target.value)
+                  clearFieldError('displayName')
+                }}
+                placeholder={scope === 'language' ? '例如：Anthropic 语言模型凭据' : '例如：自建 OpenAI 兼容端点'}
+                autoComplete="off"
+              />
+            </FormField>
+          )}
+
+          {effectiveMode === 'legacy' && (
+            <FormField label="供应商" hint="凭据所属的供应商账号，决定哪些插件的模型可以使用它。">
+              <Select value={customProvider} onChange={(e) => setCustomProvider(e.target.value)}>
+                {customProviders.map((a) => (
+                  <option key={a.value} value={a.value}>
+                    {a.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
+
+          {effectiveMode === 'legacy' && (
+            <FormField
+              label="Base URL（可选）"
+              hint="留空时使用供应商的默认端点；填写时请写到版本路径，例如 https://api.example.com/v1。"
+            >
+              <Input
+                type="text"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://api.openai.com/v1"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </FormField>
           )}
 
           {effectiveMode === 'template' && (
-            <div>
-              <label htmlFor="credential-name-optional" className="mb-1 block text-xs font-medium text-foreground">
-                显示名称 (可选)
-              </label>
-              <input
-                id="credential-name-optional"
+            <FormField
+              label="显示名称（可选）"
+              hint="留空时使用插件名称作为凭据显示名称。"
+            >
+              <Input
                 type="text"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => {
+                  setDisplayName(e.target.value)
+                  clearFieldError('displayName')
+                }}
                 placeholder={template ? template.displayName : '默认使用插件名称'}
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
+                autoComplete="off"
               />
-            </div>
+            </FormField>
           )}
 
           {effectiveMode === 'legacy' ? (
-            <div>
-              <label htmlFor="credential-key" className="mb-1 block text-xs font-medium text-foreground">API Key 密钥</label>
-              <input
-                id="credential-key"
+            <FormField
+              label="API Key"
+              required
+              error={fieldErrors.apiKey}
+              hint="密钥以加密形式存储于服务端，保存后不再明文展示。"
+            >
+              <Input
                 type="password"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value)
+                  clearFieldError('apiKey')
+                }}
                 placeholder="sk-..."
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
+                autoComplete="off"
+                spellCheck={false}
               />
-            </div>
-          ) : useServiceAccount ? (
-            <div>
-              <label htmlFor="credential-service-account" className="mb-1 block text-xs font-medium text-foreground">
-                {template?.credential.label}
-              </label>
-              <textarea
-                id="credential-service-account"
+            </FormField>
+          ) : useJsonSecret ? (
+            <FormField
+              label={credentialFieldLabel ?? '凭据 JSON'}
+              required
+              error={fieldErrors.serviceAccount}
+              hint={template?.credential.helpText ?? '粘贴凭据 JSON，仅服务端解密使用。'}
+              keepHintOnError
+            >
+              <Textarea
                 value={serviceAccountRaw}
-                onChange={(e) => setServiceAccountRaw(e.target.value)}
-                rows={5}
+                onChange={(e) => {
+                  setServiceAccountRaw(e.target.value)
+                  clearFieldError('serviceAccount')
+                }}
+                rows={6}
                 placeholder={template?.credential.placeholder}
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 font-mono text-xs text-foreground outline-none"
+                spellCheck={false}
+                className="font-mono text-xs"
               />
-              {template?.credential.helpText && (
-                <p className="mt-1 text-[11px] text-muted-foreground">{template.credential.helpText}</p>
-              )}
-            </div>
+            </FormField>
           ) : (
-            <div>
-              <label htmlFor="credential-key" className="mb-1 block text-xs font-medium text-foreground">
-                {template?.credential.label ?? 'API Key 密钥'}
-              </label>
-              <input
-                id="credential-key"
+            <FormField
+              label={credentialFieldLabel ?? 'API Key'}
+              required
+              error={fieldErrors.apiKey}
+              hint={template?.credential.helpText ?? '密钥以加密形式存储于服务端，保存后不再明文展示。'}
+              keepHintOnError
+            >
+              <Input
                 type="password"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value)
+                  clearFieldError('apiKey')
+                }}
                 placeholder={template?.credential.placeholder ?? 'sk-...'}
-                className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
+                autoComplete="new-password"
+                spellCheck={false}
               />
-              {template?.credential.helpText && (
-                <p className="mt-1 text-[11px] text-muted-foreground">{template.credential.helpText}</p>
-              )}
-            </div>
+            </FormField>
           )}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-[var(--radius-control)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-subtle"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending || (effectiveMode === 'template' && !template)}
-            className="flex items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-4 py-1.5 text-xs font-medium text-accent-contrast hover:bg-accent-hover disabled:opacity-50"
-          >
-            {createMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            保存凭据
-          </button>
-        </div>
+        </FieldGroup>
       </div>
     </Dialog>
   )

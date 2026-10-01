@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { serverApi } from '@/shared/services/server-api'
 import { LoginForm } from '@/features/auth/components/login-form'
 import { ServiceUnavailable } from '@/shared/components/service-unavailable'
+import { Skeleton, SkeletonText } from '@/shared/components/ui/skeleton'
 import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,34 @@ export const dynamic = 'force-dynamic'
 export const metadata = {
   title: '登录 - MuseCanvas',
   description: '登录 MuseCanvas AI 创作工作台',
+}
+
+/** Shape-matched placeholder for the client form and its OAuth alternatives. */
+function LoginFormFallback() {
+  return (
+    <div aria-busy="true" className="flex flex-col gap-6">
+      <span className="sr-only">正在加载登录表单</span>
+      <header className="flex flex-col items-center gap-2" aria-hidden="true">
+        <Skeleton className="h-7 w-48" />
+        <SkeletonText lines={1} width="16rem" />
+      </header>
+      <div className="flex flex-col gap-6" aria-hidden="true">
+        <div className="flex flex-col">
+          <Skeleton className="mb-2 h-5 w-24" />
+          <Skeleton className="h-[var(--control-md)] w-full rounded-control" />
+          <Skeleton className="mt-1 h-4 w-48" />
+        </div>
+        <Skeleton className="h-[var(--control-md)] w-full rounded-control" />
+      </div>
+      <div className="flex flex-col gap-3" aria-hidden="true">
+        <SkeletonText lines={1} width="12rem" className="mx-auto" />
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Skeleton className="h-[var(--control-md)] flex-1 rounded-control" />
+          <Skeleton className="h-[var(--control-md)] flex-1 rounded-control" />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default async function LoginPage({
@@ -29,7 +58,7 @@ export default async function LoginPage({
   }
 
   return (
-    <Suspense fallback={<div className="p-8 text-center text-sm text-muted-foreground">正在加载...</div>}>
+    <Suspense fallback={<LoginFormFallback />}>
       <LoginForm />
     </Suspense>
   )

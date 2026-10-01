@@ -5,24 +5,56 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS, type OAuthProviderName } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { AdminOAuthProvider } from '@/shared/types'
-import { Check, Loader2, RefreshCw, Save, ShieldCheck } from 'lucide-react'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  SkeletonText,
+  SkeletonTile,
+  Switch,
+} from '@/shared/components/ui'
+import { RefreshCw } from 'lucide-react'
+
+const oauthQueryKey = ['admin', 'oauth-providers'] as const
+
+interface StatusMessage {
+  tone: 'success' | 'danger'
+  msg: string
+}
+
+const sourceLabel: Record<AdminOAuthProvider['source'], string> = {
+  database: '数据库配置',
+  environment: '环境变量配置',
+  none: '未配置凭据',
+}
+
+/** Provider ids are lowercase codes; the display name comes from the payload's label. */
+function providerName(provider: AdminOAuthProvider): string {
+  return provider.label || provider.provider
+}
 
 export function AdminOAuthView() {
   const queryClient = useQueryClient()
-  const [statusMsg, setStatusMsg] = useState('')
+  const [status, setStatus] = useState<StatusMessage | null>(null)
 
   const {
     data: providers = [],
     isLoading,
+    isFetching,
+    isError,
+    error,
     refetch,
   } = useQuery({
-    queryKey: ['admin', 'oauth-providers'],
+    queryKey: oauthQueryKey,
     queryFn: async () => {
       const res = await api<AdminOAuthProvider[]>(API_ENDPOINTS.admin.oauthProviders)
+      if (!res.success) throw new Error(res.error?.message || '读取 OAuth 提供商失败')
       return res.data || []
     },
   })
-
 
   const toggleMutation = useMutation({
     mutationFn: async ({ provider, enabled }: { provider: string; enabled: boolean }) => {
@@ -34,86 +66,131 @@ export function AdminOAuthView() {
       return res.data
     },
     onSuccess: () => {
-      setStatusMsg('OAuth 提供商状态已更新')
-      queryClient.invalidateQueries({ queryKey: ['admin', 'oauth-providers'] })
+      setStatus({ tone: 'success', msg: 'OAuth 提供商状态已更新' })
+      queryClient.invalidateQueries({ queryKey: oauthQueryKey })
     },
-    onError: (err: any) => {
-      setStatusMsg(err.message || '更新状态失败')
+    onError: (err: Error) => {
+      setStatus({ tone: 'danger', msg: `${err.message || '更新状态失败'}。开关已恢复原状态，设置未更改，请重试。` })
+      queryClient.invalidateQueries({ queryKey: oauthQueryKey })
     },
   })
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">OAuth 登录提供商</h1>
-          <p className="text-sm text-muted-foreground">配置第三方账号认证源（GitHub, Google），支持一键登录与账号绑定。</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          刷新
-        </button>
-      </div>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="OAuth 登录提供商"
+        description="配置第三方账号认证源（GitHub、Google），支持一键登录与账号绑定。"
+        actions={
+          <Button
+            variant="secondary"
+            onClick={() => void refetch()}
+            loading={isFetching}
+            icon={<RefreshCw aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+          >
+            刷新
+          </Button>
+        }
+      />
 
-      {statusMsg && (
-        <div className="rounded-[var(--radius-control)] border border-border bg-surface-subtle p-3 text-xs text-foreground">
-          {statusMsg}
-        </div>
-      )}
+      {status ? (
+        <Alert tone={status.tone} role={status.tone === 'danger' ? 'alert' : 'status'} onDismiss={() => setStatus(null)}>
+          {status.msg}
+        </Alert>
+      ) : null}
 
-      <div className="space-y-4">
-        {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">
-            <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-          </div>
-        ) : providers.length > 0 ? (
-          providers.map((p) => (
-            <div
-              key={p.provider}
-              className="flex items-center justify-between rounded-[var(--radius-card)] border border-border bg-surface p-4"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-foreground text-sm uppercase">{p.provider}</h3>
-                  <span
-                    className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${
-                      p.enabled ? 'bg-success-soft text-success' : 'bg-surface-subtle text-muted-foreground'
-                    }`}
-                  >
-                    {p.enabled ? '已启用' : '已停用'}
-                  </span>
+      {isLoading ? (
+        <div className="flex flex-col gap-4" role="status" aria-busy="true">
+          <span className="sr-only">正在加载 OAuth 提供商</span>
+          {['github', 'google'].map((provider) => (
+            <Card key={provider} aria-hidden="true" className="flex-row flex-wrap items-center justify-between gap-x-6 gap-y-3">
+              <div className="flex min-w-0 flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <SkeletonText width={provider === 'github' ? '6rem' : '7rem'} />
+                  <SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" />
+                  <SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Client ID:{' '}
-                  <span className="font-mono">
-                    {p.clientId ? `${p.clientId.slice(0, 8)}...` : '未配置'}
-                  </span>
-                </p>
+                <SkeletonText width="15rem" />
+                <SkeletonText width="22rem" />
               </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <SkeletonText width="5rem" />
+                <SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : null}
 
-              <button
-                type="button"
-                onClick={() => toggleMutation.mutate({ provider: p.provider, enabled: !p.enabled })}
-                className={`rounded-[var(--radius-control)] border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  p.enabled
-                    ? 'border-border bg-surface hover:bg-surface-subtle text-foreground'
-                    : 'border-accent bg-accent text-accent-contrast hover:bg-accent-hover'
-                }`}
-              >
-                {p.enabled ? '停用此登录' : '启用此登录'}
-              </button>
-            </div>
-          ))
-        ) : (
-          <div className="rounded-[var(--radius-card)] border border-border bg-surface p-8 text-center text-muted-foreground">
-            暂无 OAuth 提供商
+      {isError ? (
+        <EmptyState
+          variant="error"
+          title="无法加载 OAuth 提供商"
+          description={
+            error instanceof Error
+              ? `${error.message}。请检查管理后台会话与网络后重试。`
+              : '加载数据时出现问题，请稍后重试。'
+          }
+          onAction={() => void refetch()}
+          actionLabel="刷新重试"
+        />
+      ) : null}
+
+      {!isLoading && !isError ? (
+        providers.length > 0 ? (
+          <div className="flex flex-col gap-4">
+            {providers.map((p) => {
+              const name = providerName(p)
+              return (
+                <Card key={p.provider} className="flex-row flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-module text-foreground">{name}</h2>
+                      <Badge tone={p.enabled ? 'success' : 'neutral'}>{p.enabled ? '已启用' : '已停用'}</Badge>
+                      <Badge tone={p.source === 'none' ? 'warning' : 'neutral'}>{sourceLabel[p.source]}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Client ID：
+                      <span className="font-mono text-foreground">
+                        {p.clientId ? `${p.clientId.slice(0, 8)}…` : '未配置'}
+                      </span>
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      回调地址：<span className="font-mono text-foreground">{p.redirectUri || '未配置'}</span>
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-sm font-medium text-muted-foreground">启用登录</span>
+                    <Switch
+                      checked={p.enabled}
+                      aria-label={`${name} 登录`}
+                      disabled={toggleMutation.isPending}
+                      onCheckedChange={(enabled) =>
+                        toggleMutation.mutateAsync({ provider: p.provider, enabled })
+                      }
+                    />
+                  </div>
+                </Card>
+              )
+            })}
           </div>
-        )}
-      </div>
+        ) : (
+          <Card>
+            <EmptyState
+              variant="first-use"
+              objectName="OAuth 登录"
+              title="欢迎使用 OAuth 登录"
+              description="在这里你可以启用或停用 GitHub、Google 登录。提供商凭据由服务端环境变量或初始化流程写入，管理后台不负责创建提供商。"
+              actionLabel="刷新提供商列表"
+              onAction={() => void refetch()}
+            >
+              <p className="max-w-reading text-sm text-muted-foreground">
+                如果列表持续为空，请先在部署配置中为实例填写对应提供商的 Client ID 与 Client Secret。
+              </p>
+            </EmptyState>
+          </Card>
+        )
+      ) : null}
     </div>
   )
 }

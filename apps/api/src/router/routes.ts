@@ -32,13 +32,9 @@ import {
   updatePluginStatus,
   validatePluginPackage,
 } from '../modules/admin/plugins'
-import { listProviderCredentials } from '../modules/admin/credential-reads'
-import {
-  createProviderCredential,
-  deleteProviderCredential,
-  testProviderCredential,
-  updateProviderCredential,
-} from '../modules/admin/provider-credentials'
+import { listProviderCredentials } from '../modules/admin/credentials/reads'
+import { createProviderCredential, deleteProviderCredential, updateProviderCredential } from '../modules/admin/credentials/service'
+import { testProviderCredential } from '../modules/admin/credentials/connectivity'
 import { updateOAuthProvider } from '../modules/admin/oauth'
 import {
   activatePromptTemplateSet,

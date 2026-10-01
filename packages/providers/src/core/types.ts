@@ -33,6 +33,40 @@ export function parsePluginKey(key: string): { id: string; version: string } {
 }
 
 /**
+ * How the host treats a credential's (and a model's) base URL for this plugin.
+ * - `fixed`: only the declared default endpoint host; empty means the default.
+ * - `allowlisted`: any https host the manifest's `allowedHosts` admits.
+ * - `any-https`: any safe https URL (compatible endpoints), the egress allowlist
+ *   is widened to it at call time.
+ */
+export type CredentialBaseUrlPolicy = 'fixed' | 'allowlisted' | 'any-https'
+
+/**
+ * What credential a plugin consumes, declared by the plugin rather than guessed by
+ * the host. A credential belongs to a provider account, not to a plugin version:
+ * every plugin declaring the same `providerId` + schema can use it, so upgrading
+ * a plugin never invalidates stored credentials.
+ *
+ * The stored payload is a single string. `secret.format` says how the admin
+ * enters it: `text` is a bare key, `json` is a JSON object pasted verbatim.
+ * Pure data (no functions) because it travels in the persisted manifest copy.
+ */
+export type PluginCredentialSpec = {
+  providerId: string
+  schemaId: string
+  secret: {
+    format: 'text' | 'json'
+    label: string
+    placeholder?: string
+    help?: string
+  }
+  baseUrl: {
+    default?: string
+    policy: CredentialBaseUrlPolicy
+  }
+}
+
+/**
  * Manifest describing plugin capabilities, supported modalities, models, host allowlists, etc.
  */
 export type MediaProviderManifest = {
@@ -53,6 +87,8 @@ export type MediaProviderManifest = {
    * e.g. 'legacy-api-key-v1' or 'json-v1'
    */
   credentialSchemas: string[]
+  /** The credential this plugin consumes. Optional for manifests that predate it. */
+  credential?: PluginCredentialSpec
   /**
    * Models this plugin can serve, each with the full parameter contract the
    * vendor actually accepts for it.
@@ -349,6 +385,8 @@ export type LanguageProviderManifest = {
   languageProtocols: LanguageProtocol[]
   allowedHosts: string[]
   credentialSchemas: string[]
+  /** The credential this plugin consumes. Optional for manifests that predate it. */
+  credential?: PluginCredentialSpec
   models?: {
     id: string
     name?: string
@@ -360,6 +398,8 @@ export type LanguageProviderManifest = {
 
 /** Normalized completion request crossing the plugin boundary (no transport secrets). */
 export type LanguageRequest = {
+  /** The model's configured wire protocol; one of the manifest's `languageProtocols`. */
+  protocol?: LanguageProtocol
   vendorModelId: string
   system: string
   user: string

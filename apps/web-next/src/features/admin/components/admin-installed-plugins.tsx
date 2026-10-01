@@ -13,7 +13,20 @@ import type {
 } from '@/shared/types'
 import { humanFileSize, shortDigest } from '../lib/plugin-upload'
 import { AdminPluginUploadDialog } from './admin-plugin-upload-dialog'
-import { Blocks, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { Blocks, RefreshCw, Trash2, Upload } from 'lucide-react'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  SkeletonText,
+  SkeletonTile,
+  Spinner,
+  Switch,
+} from '@/shared/components/ui'
+import type { BadgeTone } from '@/shared/components/ui'
 
 // The worker promotes `pending` rows on its maintenance loop (setInterval(runMaintenance,
 // 5000) in apps/worker/src/index.ts), and a failed refresh leaves rows pending, so the
@@ -27,24 +40,26 @@ const STATUS_LABEL: Record<InstalledPluginStatus, string> = {
   failed: '加载失败',
 }
 
-// Status is always conveyed by the Chinese label text; colour only reinforces it.
-const STATUS_CHIP_CLASS: Record<InstalledPluginStatus, string> = {
-  pending: 'bg-surface-subtle text-muted-foreground',
-  active: 'bg-success-soft text-success',
-  disabled: 'bg-surface-subtle text-muted-foreground',
-  failed: 'bg-danger-soft text-danger',
+// Status is always conveyed by the Chinese label text; the Badge tone only reinforces it.
+const STATUS_TONE: Record<InstalledPluginStatus, BadgeTone> = {
+  pending: 'neutral',
+  active: 'success',
+  disabled: 'neutral',
+  failed: 'danger',
 }
 
-const SECTION_COPY: Record<PluginKind, { title: string; description: string }> = {
+const SECTION_COPY: Record<PluginKind, { title: string; description: string; objectName: string }> = {
   media: {
     title: '已安装媒体插件',
     description:
-      '上传的媒体插件（provider_plugins 行）。Worker 加载激活后，插件会并入上方「供应商插件目录」，其模型作为服务端合成的预设出现在「添加模型」中，并可为其签发媒体凭据。',
+      '上传的媒体插件（provider_plugins 行）。Worker 加载激活后，插件会并入上方「供应商插件目录」，其模型作为服务端合成的预设出现在「创建模型」中，并可为其签发媒体凭据。',
+    objectName: '媒体插件',
   },
   language: {
     title: '已安装语言插件',
     description:
-      '上传的语言模型插件（provider_plugins 行）。Worker 加载激活后，其模型由服务端合并进 GET admin/model-presets，作为预设出现在「添加新语言模型」的下拉中；客户端不伪造预设。',
+      '上传的语言模型插件（provider_plugins 行）。Worker 加载激活后，其模型由服务端合并进 GET admin/model-presets，作为预设出现在「创建新语言模型」的下拉中；客户端不伪造预设。',
+    objectName: '语言插件',
   },
 }
 
@@ -61,27 +76,52 @@ function manifestModels(plugin: AdminPluginDto): { id: string; name?: string }[]
   }, [])
 }
 
+/** One scan finding: severity carried by a Badge plus text, never by colour alone. */
 function FindingList({ findings, emptyText }: { findings: AdminPluginScanFinding[]; emptyText?: string }) {
   if (findings.length === 0) {
-    return emptyText ? <div className="text-[11px] text-muted-foreground">{emptyText}</div> : null
+    return emptyText ? <p className="text-xs text-muted-foreground">{emptyText}</p> : null
   }
   return (
-    <ul className="space-y-1">
+    <ul className="flex flex-col gap-2">
       {findings.map((f, i) => (
         <li
           key={`${f.rule}-${f.line ?? 'x'}-${i}`}
-          className={`rounded border px-2 py-1 text-[11px] ${
-            f.severity === 'error' ? 'border-danger-soft bg-danger-soft/20 text-danger' : 'border-border bg-surface-subtle text-muted-foreground'
+          className={`flex flex-wrap items-start gap-2 rounded-control p-2 text-xs ${
+            f.severity === 'error' ? 'bg-danger-soft text-danger' : 'bg-tonal text-muted-foreground'
           }`}
         >
           {/* 严重级别以文字呈现，不依赖颜色区分 */}
-          <span className="font-semibold">{f.severity === 'error' ? '错误' : '警告'}</span>
-          <span className="ml-1 font-mono">{f.rule}</span>
-          {typeof f.line === 'number' && <span className="ml-1 font-mono">第 {f.line} 行</span>}
-          <span className="ml-1">{f.message}</span>
+          <Badge tone={f.severity === 'error' ? 'danger' : 'warning'} className="shrink-0">
+            {f.severity === 'error' ? '错误' : '警告'}
+          </Badge>
+          <span className="font-mono">{f.rule}</span>
+          {typeof f.line === 'number' && <span className="font-mono tabular-nums">第 {f.line} 行</span>}
+          <span>{f.message}</span>
         </li>
       ))}
     </ul>
+  )
+}
+
+/** Label + value chip row inside a plugin card. */
+function ChipRow({ label, items }: { label: string; items: { key: string; text: string; title?: string }[] }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-overline text-muted-foreground">
+        {label}（<span className="font-mono tabular-nums">{items.length}</span>）
+      </p>
+      {items.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {items.map((item) => (
+            <Badge key={item.key} tone="neutral" className="max-w-full font-mono" title={item.title}>
+              {item.text}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <p className="font-mono text-xs text-muted-foreground">-</p>
+      )}
+    </div>
   )
 }
 
@@ -168,110 +208,141 @@ export function AdminInstalledPlugins({ kind }: AdminInstalledPluginsProps) {
   const copy = SECTION_COPY[kind]
 
   return (
-    <section className="space-y-3" aria-labelledby={`installed-plugins-${kind}-heading`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h2 id={`installed-plugins-${kind}-heading`} className="text-sm font-semibold text-foreground">
+    <section className="flex flex-col gap-4" aria-labelledby={`installed-plugins-${kind}-heading`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1 text-foreground">
+          <h2 id={`installed-plugins-${kind}-heading`} className="text-module">
             {copy.title}
           </h2>
-          <p className="max-w-3xl text-xs text-muted-foreground">{copy.description}</p>
+          <p className="max-w-reading text-sm text-muted-foreground">{copy.description}</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
             onClick={() => {
               setActionError('')
               setStatusNote('')
               setUploadOpen(true)
             }}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-3 text-xs font-medium text-accent-contrast transition-colors hover:bg-accent-hover"
+            icon={<Upload aria-hidden="true" />}
           >
-            <Upload className="h-3.5 w-3.5" aria-hidden="true" />
             上传插件
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => {
               setActionError('')
               refetch()
             }}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
+            icon={<RefreshCw aria-hidden="true" className={isFetching ? 'motion-spin' : undefined} />}
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
             刷新
-          </button>
+          </Button>
         </div>
       </div>
 
       {actionError && (
-        <div className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
-          {actionError}
-        </div>
+        <Alert tone="danger" role="alert" title="插件操作未完成">
+          {actionError}。请按提示修正后重试；若插件仍被模型引用，请先解除绑定。
+        </Alert>
       )}
       {statusNote && (
-        <div className="rounded border border-border bg-surface-subtle p-2 text-xs text-muted-foreground" role="status">
+        <Alert tone="info" title="操作结果">
           {statusNote}
-        </div>
+        </Alert>
       )}
 
       {isLoading ? (
-        <div className="rounded-[var(--radius-card)] border border-border bg-surface p-8 text-center text-muted-foreground">
-          <Loader2 className="mx-auto h-5 w-5 animate-spin" aria-hidden="true" />
+        <div className="grid gap-4 lg:grid-cols-2" role="status" aria-busy="true">
           <span className="sr-only">正在加载已安装插件</span>
+          {Array.from({ length: 2 }, (_, index) => (
+            <Card key={index} density="compact" aria-hidden="true" className="h-full gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-2"><SkeletonText width="10rem" /><SkeletonText width="8rem" /></div>
+                <SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" />
+              </div>
+              <SkeletonText lines={2} />
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
+                <SkeletonText width="7rem" /><SkeletonText width="9rem" />
+                <SkeletonText width="7rem" /><SkeletonText width="8rem" />
+                <SkeletonText width="7rem" /><SkeletonText width="12rem" />
+              </div>
+              <SkeletonText width="8rem" />
+              <div className="flex gap-2"><SkeletonTile className="aspect-auto h-6 w-20 rounded-pill" /><SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" /></div>
+              <SkeletonText lines={2} />
+              <div className="mt-auto flex justify-end"><SkeletonTile className="aspect-auto h-8 w-24 rounded-control" /></div>
+            </Card>
+          ))}
         </div>
       ) : error ? (
-        <div className="rounded-[var(--radius-card)] border border-danger-soft bg-danger-soft/20 p-4 text-xs text-danger" role="alert">
-          {error.message || '加载已安装插件失败'}
-        </div>
+        <Alert
+          tone="danger"
+          role="alert"
+          title="无法加载已安装插件"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => refetch()}>
+              刷新重试
+            </Button>
+          }
+        >
+          {error.message || '加载已安装插件失败'}。请检查后端服务状态后重试。
+        </Alert>
       ) : scopedPlugins.length === 0 ? (
-        <div className="rounded-[var(--radius-card)] border border-border bg-surface p-8 text-center text-xs text-muted-foreground">
-          尚未安装任何{kind === 'media' ? '媒体' : '语言'}插件；内置插件以卡片形式展示在上方目录中，不在此列表内。
-        </div>
+        <Card density="compact">
+          <EmptyState
+            variant="first-use"
+            density="compact"
+            objectName={copy.objectName}
+            title={`还没有安装${kind === 'media' ? '媒体' : '语言'}插件`}
+            description="尚未安装任何自定义插件；内置插件以卡片形式展示在上方目录中，不在此列表内。点击右上角「上传插件」可添加自定义插件。"
+          />
+        </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        // `md` is 960px here: two columns only fit comfortably from `lg` (1280px)
+        // once the 260px admin sidebar and page padding are subtracted.
+        <div className="grid gap-4 lg:grid-cols-2">
           {scopedPlugins.map((p) => {
             const models = manifestModels(p)
+            const togglable = p.status === 'active' || p.status === 'disabled'
             return (
-              <div key={p.id} className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4">
-                <div className="flex items-start justify-between gap-2">
+              <Card key={p.id} density="compact" className="h-full">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Blocks className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      <h3 className="truncate text-sm font-semibold text-foreground">{p.displayName}</h3>
+                      <Blocks aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0 text-muted-foreground" />
+                      <h3 className="truncate text-sm font-medium">{p.displayName}</h3>
                     </div>
-                    <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
                       {p.pluginId}@{p.pluginVersion}
-                    </div>
+                    </p>
                   </div>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP_CLASS[p.status]}`}>
-                    {p.status === 'pending' && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+                  <Badge tone={STATUS_TONE[p.status]} className="shrink-0" icon={p.status === 'pending' ? <Spinner size="xs" /> : undefined}>
                     {STATUS_LABEL[p.status]}
-                  </span>
+                  </Badge>
                 </div>
 
-                {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
+                {p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
 
                 {p.status === 'pending' && (
-                  <p className="rounded-[var(--radius-control)] bg-surface-subtle p-2 text-[11px] text-muted-foreground" role="status">
+                  <div role="status" className="rounded-control bg-tonal p-3 text-xs text-muted-foreground">
                     Worker 正在拉取制品、核验 sha256 并重新扫描（约 5 秒一轮）；若对象存储或 ALLOW_PLUGIN_UPLOAD 未配置，此状态可能持续。
-                  </p>
-                )}
-                {p.status === 'failed' && (
-                  <div className="rounded-[var(--radius-control)] border border-danger-soft bg-danger-soft/20 p-2 text-[11px] text-danger" role="alert">
-                    <div className="font-mono font-semibold">{p.errorCode || 'PLUGIN_LOAD_FAILED'}</div>
-                    <div>{p.errorMessage || 'Worker 加载该插件失败'}</div>
-                    <div className="mt-1 text-muted-foreground">加载失败的字节不可重新启用，请以新版本号重新上传。</div>
                   </div>
                 )}
+                {p.status === 'failed' && (
+                  // The 4px bar is `Alert`'s danger tone — a soft red is never a border colour.
+                  <Alert tone="danger" role="alert" title={p.errorCode || 'PLUGIN_LOAD_FAILED'} icon={false}>
+                    <div>{p.errorMessage || 'Worker 加载该插件失败'}</div>
+                    <div className="mt-1">加载失败的版本不可重新启用，请以新版本号重新上传插件包。</div>
+                  </Alert>
+                )}
 
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
                   <dt className="text-muted-foreground">Allowed hosts</dt>
                   <dd className="flex flex-wrap gap-1">
                     {p.allowedHosts.length > 0 ? (
                       p.allowedHosts.map((host) => (
-                        <span key={host} className="rounded bg-surface-subtle px-1.5 py-0.5 font-mono text-foreground">
+                        <Badge key={host} tone="neutral" className="max-w-full font-mono">
                           {host}
-                        </span>
+                        </Badge>
                       ))
                     ) : (
                       <span className="font-mono text-muted-foreground">-</span>
@@ -280,9 +351,9 @@ export function AdminInstalledPlugins({ kind }: AdminInstalledPluginsProps) {
                   <dt className="text-muted-foreground">凭据 Schema</dt>
                   <dd className="flex flex-wrap gap-1">
                     {p.credentialSchemas.map((schema) => (
-                      <span key={schema} className="rounded bg-surface-subtle px-1.5 py-0.5 font-mono text-foreground">
+                      <Badge key={schema} tone="neutral" className="max-w-full font-mono">
                         {schema}
-                      </span>
+                      </Badge>
                     ))}
                   </dd>
                   {p.kind === 'media' && p.modalities.length > 0 && (
@@ -299,65 +370,61 @@ export function AdminInstalledPlugins({ kind }: AdminInstalledPluginsProps) {
                   )}
                   <dt className="text-muted-foreground">制品</dt>
                   <dd className="font-mono text-foreground">
-                    sha256:{' '}
-                    <span title={p.artifactDigest}>{shortDigest(p.artifactDigest)}</span>
+                    sha256: <span title={p.artifactDigest}>{shortDigest(p.artifactDigest)}</span>
                     <span className="ml-1 text-muted-foreground">· {humanFileSize(p.artifactSizeBytes)}</span>
                   </dd>
                 </dl>
 
-                <div className="space-y-1 text-[11px]">
-                  <div className="text-muted-foreground">支持模型（{models.length}）</div>
-                  <div className="flex flex-wrap gap-1">
-                    {models.map((model) => (
-                      <span key={model.id} className="rounded bg-surface-subtle px-1.5 py-0.5 font-mono text-foreground" title={model.name}>
-                        {model.id}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                <ChipRow
+                  label="支持模型"
+                  items={models.map((model) => ({ key: model.id, text: model.id, title: model.name }))}
+                />
 
-                <div className="space-y-1 text-[11px]">
-                  <div className="text-muted-foreground">扫描报告（{p.scanReport.length}）</div>
+                <div className="flex flex-col gap-1">
+                  <p className="text-overline text-muted-foreground">
+                    扫描报告（<span className="font-mono tabular-nums">{p.scanReport.length}</span>）
+                  </p>
                   <FindingList findings={p.scanReport} emptyText="安装时未发现任何问题" />
                 </div>
 
-                <div className="mt-auto flex flex-wrap items-center justify-end gap-2 pt-1">
+                <div className="mt-auto flex flex-wrap items-center justify-end gap-3">
                   {/* pending belongs to the worker, failed is terminal: no toggle offered,
                       the server would answer PLUGIN_NOT_LOADED / PLUGIN_FAILED_IMMUTABLE. */}
-                  {(p.status === 'active' || p.status === 'disabled') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatusNote('')
-                        statusMutation.mutate({ id: p.id, status: p.status === 'active' ? 'disabled' : 'active' })
-                      }}
-                      disabled={statusMutation.isPending}
-                      aria-label={p.status === 'active' ? `停用插件 ${p.displayName}` : `启用插件 ${p.displayName}`}
-                      className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
-                        p.status === 'active'
-                          ? 'bg-success-soft text-success hover:bg-success-soft/80'
-                          : 'bg-surface-subtle text-muted-foreground hover:bg-surface-subtle-strong'
-                      }`}
-                    >
-                      {p.status === 'active' ? '点击停用' : '点击启用'}
-                    </button>
+                  {togglable && (
+                    <>
+                      {/* Immediate setting: `Switch` reverts itself when the PATCH rejects,
+                          and the failure surfaces in the banner above. The card's status
+                          Badge already carries the value, so the text names the setting. */}
+                      <span className="text-sm text-muted-foreground">启用</span>
+                      <Switch
+                        checked={p.status === 'active'}
+                        disabled={statusMutation.isPending}
+                        onCheckedChange={(enabled) => {
+                          setStatusNote('')
+                          return statusMutation.mutateAsync({
+                            id: p.id,
+                            status: enabled ? 'active' : 'disabled',
+                          })
+                        }}
+                        aria-label={`插件 ${p.displayName} 启用状态`}
+                      />
+                    </>
                   )}
-                  <button
-                    type="button"
+                  <IconButton
+                    variant="danger-ghost"
+                    size="sm"
+                    disabled={deleteMutation.isPending}
                     onClick={() => {
                       if (confirm(`确认删除插件 ${p.displayName}（${p.pluginId}@${p.pluginVersion}）？`)) {
                         setStatusNote('')
                         deleteMutation.mutate(p.id)
                       }
                     }}
-                    disabled={deleteMutation.isPending}
                     aria-label={`删除插件 ${p.displayName} ${p.pluginVersion}`}
-                    className="inline-flex items-center gap-1 rounded-[var(--radius-control)] border border-border p-1.5 text-danger hover:bg-danger-soft/20 disabled:opacity-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
+                    icon={<Trash2 aria-hidden="true" />}
+                  />
                 </div>
-              </div>
+              </Card>
             )
           })}
         </div>
@@ -368,7 +435,7 @@ export function AdminInstalledPlugins({ kind }: AdminInstalledPluginsProps) {
         onClose={() => setUploadOpen(false)}
         kind={kind}
         onInstalled={({ pluginId, pluginVersion }) =>
-          setStatusNote(`已提交 ${pluginId}@${pluginVersion}：当前状态「待加载」，需等待 Worker 拉取制品、核验 sha256 并重新扫描通过后才会启用。`)
+          setStatusNote(`插件 ${pluginId}@${pluginVersion} 上传成功，当前状态「待加载」：需等待 Worker 拉取制品、核验 sha256 并重新扫描通过后才会启用。`)
         }
       />
     </section>

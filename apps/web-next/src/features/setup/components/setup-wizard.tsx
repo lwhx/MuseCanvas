@@ -1,36 +1,234 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
+import type {
+  BootstrapCheckKey,
+  OnboardingSectionKey,
+  OnboardingSectionState,
+  SetupStatusResponse,
+} from '@/shared/types'
 import {
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Database,
-  Globe,
-  Key,
-  Layers,
-  Loader2,
-  Mail,
-  ShieldAlert,
-  Sparkles,
-} from 'lucide-react'
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+  SkeletonRow,
+  SkeletonText,
+  Stepper,
+  buttonVariants,
+} from '@/shared/components/ui'
+import { cn } from '@/shared/lib/cn'
+import { Check, ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react'
 
-interface SetupStatus {
-  isConfigured: boolean
-  sections?: Record<string, boolean>
+/**
+ * What the wizard can actually read from `GET /setup/status`: the persisted
+ * onboarding sections and the server-side bootstrap diagnostics. Everything else
+ * on these steps is a manual checklist item and is labelled as such — the guide
+ * never presents reading a checklist as having run a check (components.md 反馈与状态:
+ * 不把假保存、假上传包装成完成).
+ */
+interface WizardStep {
+  id: string
+  label: string
+  /** Onboarding sections whose real, stored status this step reports. */
+  sections: OnboardingSectionKey[]
+  summary: string
+  /** Manual verification items: the wizard does not check these. */
+  manual: string[]
 }
 
-const steps = [
-  { id: 'site', label: '站点配置', icon: Globe },
-  { id: 'smtp', label: 'SMTP 邮件与管理员', icon: Mail },
-  { id: 'storage', label: '对象存储 (S3)', icon: Database },
-  { id: 'providers', label: 'AI 模型与供应商', icon: Sparkles },
-  { id: 'review', label: '系统初始化完成', icon: CheckCircle2 },
+const steps: WizardStep[] = [
+  {
+    id: 'site',
+    label: '站点配置',
+    sections: ['site'],
+    summary: '站点配置包括服务域名（例如 https://musecanvas.example.com）及公开访问端点。',
+    manual: [
+      '服务端环境变量 BASE_URL 已指向本实例的公开地址。',
+      '站点名称与地址将用于邮件、OAuth 回调与分享链接。',
+    ],
+  },
+  {
+    id: 'smtp',
+    label: 'SMTP 邮件与管理员',
+    sections: ['smtp', 'admin'],
+    summary: '配置用于向用户发送邮箱登录验证码（OTP）的 SMTP 发信服务器，并领取第一个管理员账号。',
+    manual: [
+      '发信测试在管理后台的系统配置页执行，向导本身不会发送任何邮件。',
+      '开发环境下可直接查看后端控制台输出的 OTP 验证码，免发信调试。',
+    ],
+  },
+  {
+    id: 'storage',
+    label: '对象存储（S3）',
+    sections: ['storage'],
+    summary: '对象存储（S3 兼容、阿里云 OSS、腾讯云 COS、Cloudflare R2、本地 MinIO）用于持久化保存用户生成的图片资产。',
+    manual: [
+      '存储桶凭据在管理后台的系统配置页写入，向导不读写任何对象。',
+      'Worker 会在生成完毕后把资产上传至目标存储桶并签发访问 URL。',
+    ],
+  },
+  {
+    id: 'providers',
+    label: 'AI 模型与供应商',
+    sections: ['providers', 'models'],
+    summary: '配置上游生成大模型服务凭据（如 OpenAI DALL·E 3、火山引擎 Seedream、Anthropic Claude、Google Veo）。',
+    manual: [
+      '凭据可在系统完成引导后，于管理后台添加多个 API Key 并配置费率与用量。',
+      '向导不请求任何上游接口，也不会校验 Key 是否可用。',
+    ],
+  },
+  {
+    id: 'review',
+    label: '环境检查与完成',
+    sections: ['oauth', 'templates', 'runtime'],
+    summary: '汇总服务端启动时记录的环境检查结果，以及尚未完成的引导条目。',
+    manual: ['下方“环境检查”来自服务端读取结果；其余条目需要你逐项人工确认。'],
+  },
 ]
+
+export function SetupWizardSkeleton() {
+  return (
+    <div className="flex min-h-screen flex-col bg-canvas text-foreground" role="status" aria-busy="true">
+      <span className="sr-only">正在读取系统配置状态</span>
+      <header className="flex min-h-[var(--layout-header)] shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4 sm:px-6" aria-hidden="true">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+      </header>
+      <div className="shrink-0 border-b border-border bg-tonal px-4 py-4 sm:px-6" aria-hidden="true">
+        <ol className="mx-auto flex w-full max-w-content flex-col gap-4 sm:flex-row sm:items-start sm:gap-0">
+          {steps.map((step) => (
+            <li key={step.id} className="relative flex min-w-0 items-center gap-3 pb-6 last:pb-0 sm:flex-1 sm:flex-col sm:items-center sm:gap-2 sm:pb-0">
+              <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+              <Skeleton className="h-4 w-28 sm:max-w-full" />
+            </li>
+          ))}
+        </ol>
+      </div>
+      <main className="flex flex-1 justify-center px-4 py-6 sm:px-6" aria-hidden="true">
+        <div className="w-full max-w-form">
+          <Card className="gap-6">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-6 w-40" />
+              <SkeletonText lines={1} />
+            </div>
+            <div className="flex flex-col gap-6">
+              <SkeletonText lines={2} />
+              <div className="flex flex-col gap-3 rounded-control bg-tonal p-4">
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-32" />
+                  <SkeletonText lines={1} />
+                </div>
+                <SkeletonRow />
+                <SkeletonRow />
+              </div>
+              <div className="flex flex-col gap-3 rounded-control bg-tonal p-4">
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-32" />
+                  <SkeletonText lines={1} />
+                </div>
+                <SkeletonText lines={2} />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Skeleton className="h-[var(--control-md)] w-28 rounded-control" />
+              <Skeleton className="h-[var(--control-md)] w-28 rounded-control" />
+            </div>
+          </Card>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+const checkKeyLabel: Record<BootstrapCheckKey, string> = {
+  database: '数据库连接',
+  redis: 'Redis Streams 队列',
+  masterKey: '主密钥（HKDF）',
+  runtime: '运行时限制',
+}
+
+function sectionLabel(key: OnboardingSectionKey): string {
+  return {
+    bootstrap: '环境引导',
+    site: '站点信息',
+    smtp: 'SMTP 邮件',
+    admin: '管理员账号',
+    storage: '对象存储',
+    providers: '模型供应商',
+    models: '生成模型',
+    oauth: 'OAuth 登录',
+    templates: '提示词模板',
+    runtime: '运行时限制',
+  }[key]
+}
+
+function SectionStatusLine({
+  sectionKey,
+  state,
+}: {
+  sectionKey: OnboardingSectionKey
+  state?: OnboardingSectionState
+}) {
+  const complete = state?.status === 'complete'
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <span className="text-sm text-foreground">{sectionLabel(sectionKey)}</span>
+      <span className="flex items-center gap-2">
+        {state ? (
+          <span className="font-mono text-xs text-muted-foreground">{state.updatedAt.slice(0, 10)}</span>
+        ) : null}
+        <Badge tone={complete ? 'success' : 'neutral'}>{complete ? '服务端已记录' : '尚未完成'}</Badge>
+      </span>
+    </div>
+  )
+}
+
+/** Tonal grouping inside a card — spacing and background, never a divider rule. */
+function InfoGroup({
+  title,
+  caption,
+  children,
+}: {
+  title: string
+  caption: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-control bg-tonal p-4">
+      <div className="flex flex-col gap-1">
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <p className="text-xs text-muted-foreground">{caption}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ManualList({ items }: { items: string[] }) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {items.map((item) => (
+        <li key={item} className="flex items-start gap-2 text-sm text-foreground">
+          <CircleAlert aria-hidden="true" className="mt-1 h-[var(--icon-xs)] w-[var(--icon-xs)] shrink-0 text-muted-foreground" />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 export function SetupWizard() {
   const router = useRouter()
@@ -41,10 +239,10 @@ export function SetupWizard() {
     Math.max(0, steps.findIndex((s) => s.id === stepParam)),
   )
 
-  const { data: status, isLoading } = useQuery({
+  const { data: status, isLoading } = useQuery<SetupStatusResponse | null>({
     queryKey: ['setup', 'status'],
     queryFn: async () => {
-      const res = await api<SetupStatus>(API_ENDPOINTS.setup.status)
+      const res = await api<SetupStatusResponse>(API_ENDPOINTS.setup.status)
       return res.data || null
     },
   })
@@ -55,6 +253,7 @@ export function SetupWizard() {
   }, [stepParam])
 
   const currentStep = steps[currentStepIndex] || steps[0]
+  const isLastStep = currentStepIndex === steps.length - 1
 
   function navigateToStep(idx: number) {
     if (idx >= 0 && idx < steps.length) {
@@ -64,179 +263,168 @@ export function SetupWizard() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-canvas">
-        <Loader2 className="h-8 w-8 animate-spin text-accent" />
-      </div>
-    )
+    return <SetupWizardSkeleton />
   }
+
+  const checks = status?.bootstrap?.checks ?? []
+  const environmentReady = status?.bootstrap?.ready === true
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-foreground">
-      {/* Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface px-6">
+      {/* Header — a page-level rule is allowed here (this is not a card). */}
+      <header className="flex min-h-[var(--layout-header)] shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-surface px-4 sm:px-6">
         <div className="flex items-center gap-3">
-          <span className="text-xl font-bold tracking-tight text-foreground">MuseCanvas</span>
-          <span className="rounded bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-strong">
-            系统安装向导
-          </span>
+          <span className="text-module text-foreground">MuseCanvas</span>
+          <Badge tone="accent">系统安装向导</Badge>
         </div>
-        {status?.isConfigured && (
-          <span className="text-xs text-muted-foreground">系统已完成初始配置</span>
-        )}
+        {status?.setupComplete ? (
+          <span className="text-sm text-muted-foreground">系统已完成初始配置</span>
+        ) : null}
       </header>
 
-      {/* Stepper Navigation */}
-      <div className="border-b border-border bg-surface-subtle/50 px-6 py-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          {steps.map((step, idx) => {
-            const Icon = step.icon
-            const isActive = idx === currentStepIndex
-            const isCompleted = idx < currentStepIndex
-            return (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => navigateToStep(idx)}
-                className={`flex items-center gap-2 text-xs font-medium transition-colors ${
-                  isActive
-                    ? 'text-accent font-semibold'
-                    : isCompleted
-                      ? 'text-foreground'
-                      : 'text-muted-foreground'
-                }`}
-              >
-                <div
-                  className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs ${
-                    isActive
-                      ? 'border-accent bg-accent text-accent-contrast'
-                      : isCompleted
-                        ? 'border-border bg-surface text-success'
-                        : 'border-border bg-surface text-muted-foreground'
-                  }`}
-                >
-                  {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
-                </div>
-                <span className="hidden sm:inline">{step.label}</span>
-              </button>
-            )
-          })}
+      {/* Stepper: horizontal from 640px (`sm`) up, vertical below it, labels always visible. */}
+      <div className="shrink-0 border-b border-border bg-tonal px-4 py-4 sm:px-6">
+        <div className="mx-auto w-full max-w-content">
+          <Stepper
+            steps={steps.map((step) => ({ id: step.id, label: step.label }))}
+            current={currentStepIndex}
+            onStepSelect={(index) => navigateToStep(index)}
+            aria-label="安装向导步骤"
+          />
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <main className="flex flex-1 justify-center p-6">
-        <div className="w-full max-w-2xl rounded-[var(--radius-card)] border border-border bg-surface p-8 shadow-sm space-y-6">
-          <div className="border-b border-border pb-4">
-            <h2 className="text-lg font-bold text-foreground">{currentStep.label}</h2>
-            <p className="text-xs text-muted-foreground">
-              为 MuseCanvas 实例配置核心基础设施参数，可随时在管理后台更改。
-            </p>
-          </div>
+      <main className="flex flex-1 justify-center px-4 py-6 sm:px-6">
+        <div className="w-full max-w-form">
+          <Card className="gap-6">
+            <CardHeader className="gap-1">
+              <CardTitle level={2}>{currentStep.label}</CardTitle>
+              <CardDescription>
+                为 MuseCanvas 实例配置核心基础设施参数，可随时在管理后台更改。
+              </CardDescription>
+            </CardHeader>
 
-          {currentStep.id === 'site' && (
-            <div className="space-y-4 text-xs text-muted-foreground">
-              <p>
-                站点配置包括服务域名（例如 <code className="font-mono">https://musecanvas.example.com</code>）及公开访问端点。
-              </p>
-              <div className="rounded-[var(--radius-control)] border border-border bg-surface-subtle p-4">
-                <p className="font-medium text-foreground">环境变量自适应检查</p>
-                <p className="mt-1">
-                  服务已检测到本地 Next.js / API 运行配置。请确保服务端 <code className="font-mono">BASE_URL</code> 已经正确指向本实例。
-                </p>
-              </div>
-            </div>
-          )}
+            <CardBody className="gap-6">
+              <p className="text-sm text-foreground">{currentStep.summary}</p>
 
-          {currentStep.id === 'smtp' && (
-            <div className="space-y-4 text-xs text-muted-foreground">
-              <p>
-                配置用于向用户发送邮箱登录验证码 (OTP) 的 SMTP 发信服务器。
-              </p>
-              <div className="rounded-[var(--radius-control)] border border-border bg-surface-subtle p-4">
-                <p className="font-medium text-foreground">SMTP 发信测试</p>
-                <p className="mt-1">
-                  开发环境下可直接查看后端控制台输出的 OTP 验证码以实现免发信极速调试。
-                </p>
-              </div>
-            </div>
-          )}
-
-          {currentStep.id === 'storage' && (
-            <div className="space-y-4 text-xs text-muted-foreground">
-              <p>
-                对象存储 (S3 兼容 / 阿里云 OSS / 腾讯云 COS / Cloudflare R2 / 本地 MinIO) 用于持久化保存用户生成的图片资产。
-              </p>
-              <div className="rounded-[var(--radius-control)] border border-border bg-surface-subtle p-4">
-                <p className="font-medium text-foreground">S3 存储桶就绪状态</p>
-                <p className="mt-1">
-                  Worker 异步生成流水线将在生成完毕后自动将资产直传至目标存储桶并签发访问 URL。
-                </p>
-              </div>
-            </div>
-          )}
-
-          {currentStep.id === 'providers' && (
-            <div className="space-y-4 text-xs text-muted-foreground">
-              <p>
-                配置上游生成大模型服务凭据（如 OpenAI DALL·E 3 / 火山引擎 Seedream / Anthropic Claude / Google Veo）。
-              </p>
-              <div className="rounded-[var(--radius-control)] border border-border bg-surface-subtle p-4">
-                <p className="font-medium text-foreground">凭据即时管理</p>
-                <p className="mt-1">
-                  可在系统完成引导后，在管理员后台随时添加多个 API Key 并配置自动负载均衡或费率。
-                </p>
-              </div>
-            </div>
-          )}
-
-          {currentStep.id === 'review' && (
-            <div className="space-y-4 text-center py-6">
-              <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
-              <h3 className="text-base font-bold text-foreground">安装与环境检查就绪</h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                您的 MuseCanvas 实例已具备运行所需的所有关键组件。现在即可进入创作控制台或管理员后台。
-              </p>
-              <div className="pt-4 flex justify-center gap-3">
-                <a
-                  href="/generate"
-                  className="rounded-[var(--radius-control)] bg-accent px-5 py-2 text-xs font-medium text-accent-contrast hover:bg-accent-hover"
+              {currentStep.id === 'review' ? (
+                <InfoGroup
+                  title="环境检查（服务端读取结果）"
+                  caption={
+                    status?.bootstrap
+                      ? `由服务端在 ${status.bootstrap.checkedAt.slice(0, 10)} 读取，向导本身不执行这些检查。`
+                      : '服务端未返回环境检查结果。'
+                  }
                 >
-                  进入创作端
-                </a>
-                <a
-                  href="/admin"
-                  className="rounded-[var(--radius-control)] border border-border bg-surface px-5 py-2 text-xs font-medium text-foreground hover:bg-surface-subtle"
+                  {status?.bootstrap ? (
+                    <ul className="flex flex-col gap-2">
+                      {checks.map((check) => {
+                        const ok = check.status === 'ok'
+                        return (
+                          <li key={check.key} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                            <span className="text-sm text-foreground">{checkKeyLabel[check.key]}</span>
+                            <Badge
+                              tone={ok ? 'success' : check.status === 'missing' ? 'warning' : 'danger'}
+                              icon={ok ? <Check /> : <CircleAlert />}
+                            >
+                              {ok ? '正常' : check.status === 'missing' ? '缺失' : '异常'}
+                            </Badge>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : (
+                    <Alert tone="warning" role="status">
+                      环境检查结果不可用。请确认 API 服务已启动后重新打开本页。
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    {steps.flatMap((step) => step.sections).map((sectionKey) => (
+                      <SectionStatusLine
+                        key={sectionKey}
+                        sectionKey={sectionKey}
+                        state={status?.sections?.[sectionKey]}
+                      />
+                    ))}
+                  </div>
+                </InfoGroup>
+              ) : (
+                <InfoGroup
+                  title="系统实际检查"
+                  caption="以下状态由服务端引导记录读取，向导不会代为执行任何配置或请求。"
                 >
-                  进入管理后台
-                </a>
-              </div>
-            </div>
-          )}
+                  <div className="flex flex-col gap-2">
+                    {currentStep.sections.map((sectionKey) => (
+                      <SectionStatusLine
+                        key={sectionKey}
+                        sectionKey={sectionKey}
+                        state={status?.sections?.[sectionKey]}
+                      />
+                    ))}
+                  </div>
+                </InfoGroup>
+              )}
 
-          {/* Bottom Action buttons */}
-          <div className="flex justify-between border-t border-border pt-4">
-            <button
-              type="button"
-              onClick={() => navigateToStep(currentStepIndex - 1)}
-              disabled={currentStepIndex === 0}
-              className="flex items-center gap-1 rounded-[var(--radius-control)] border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-subtle disabled:opacity-40"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              上一步
-            </button>
-
-            {currentStepIndex < steps.length - 1 && (
-              <button
-                type="button"
-                onClick={() => navigateToStep(currentStepIndex + 1)}
-                className="flex items-center gap-1 rounded-[var(--radius-control)] bg-accent px-4 py-1.5 text-xs font-medium text-accent-contrast hover:bg-accent-hover"
+              <InfoGroup
+                title="人工核对清单"
+                caption="向导不会验证以下内容，请你在对应管理后台页面自行确认。"
               >
-                下一步
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+                <ManualList items={currentStep.manual} />
+              </InfoGroup>
+
+              {currentStep.id === 'review' ? (
+                environmentReady ? (
+                  <Alert tone="success" role="status" title="环境检查通过">
+                    服务端记录的环境检查全部正常。仍需人工确认的条目见上方的引导记录状态与核对清单。
+                  </Alert>
+                ) : (
+                  <Alert tone="danger" role="alert" title="环境检查尚未通过">
+                    {status?.bootstrap
+                      ? '至少有一项环境检查未通过，请先处理上方标记为缺失或异常的条目。'
+                      : '服务端没有返回环境检查结果，因此无法确认实例是否具备运行条件。'}
+                  </Alert>
+                )
+              ) : null}
+
+              {currentStep.id === 'review' ? (
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/generate" className={buttonVariants({ variant: 'primary' })}>
+                    进入创作端
+                  </Link>
+                  <Link href="/admin" className={buttonVariants({ variant: 'secondary' })}>
+                    进入管理后台
+                  </Link>
+                </div>
+              ) : null}
+            </CardBody>
+
+            {/* Card footer actions: spacing separates them, no rule. */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => navigateToStep(currentStepIndex - 1)}
+                disabled={currentStepIndex === 0}
+                icon={<ChevronLeft aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+              >
+                上一步
+              </Button>
+
+              {!isLastStep ? (
+                <Button
+                  onClick={() => navigateToStep(currentStepIndex + 1)}
+                  icon={
+                    <ChevronRight
+                      aria-hidden="true"
+                      className={cn('h-[var(--icon-sm)] w-[var(--icon-sm)] order-2')}
+                    />
+                  }
+                >
+                  下一步
+                </Button>
+              ) : null}
+            </div>
+          </Card>
         </div>
       </main>
     </div>

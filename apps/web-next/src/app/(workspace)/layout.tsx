@@ -5,6 +5,14 @@ import { WorkspaceHeader } from '@/features/workspace/components/workspace-heade
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Workspace shell (foundations.md → 管理后台布局).
+ *
+ * The workspace body fills the viewport below the full-bleed header. Content
+ * pages such as account and library own their readable max-width containers;
+ * the generation console uses the available width for its full-screen canvas.
+ * Heights and spacing still come from the token contract in `app/globals.css`.
+ */
 export default async function WorkspaceLayout({
   children,
 }: {
@@ -24,7 +32,7 @@ export default async function WorkspaceLayout({
     <div className="flex h-screen flex-col bg-canvas text-foreground">
       <WorkspaceHeader initialUser={user} />
       <main className="flex min-h-0 flex-1 overflow-auto">
-        {children}
+        <div className="flex min-h-0 w-full flex-1 flex-col">{children}</div>
       </main>
     </div>
   )

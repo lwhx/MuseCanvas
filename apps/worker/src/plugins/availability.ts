@@ -3,6 +3,7 @@ import {
   formatPluginKey,
   globalPluginRegistry,
   globalProviderRegistry,
+  isBuiltinLanguagePluginKey,
   NormalizedProviderError,
   parsePluginKey,
 } from '../../../../packages/providers/src/index'
@@ -22,27 +23,27 @@ import type {
  * admin still considers a package usable. This module mirrors `provider_plugins`
  * into memory: an installed key resolves only while the catalog says `active`.
  *
- * Built-in media keys are the exception and are checked first: they ship in the
- * image, have no `provider_plugins` row, and must keep resolving no matter what
- * the catalog (or a bogus row shadowing their id) claims.
+ * Built-in keys (media and language) are the exception and are checked first:
+ * they ship in the image, have no `provider_plugins` row, and must keep resolving
+ * no matter what the catalog (or a bogus row shadowing their id) claims.
  */
 
 export type PluginAvailability = 'active' | 'disabled' | 'failed' | 'untracked'
 
-/** Snapshot taken before any artifact is loaded: exactly the bundled built-in media plugins. */
-const BUILTIN_MEDIA_KEYS: ReadonlySet<string> = new Set(
-  globalProviderRegistry.listManifests().map(manifest => formatPluginKey(manifest.id, manifest.version)),
+/** Snapshot taken before any artifact is loaded: exactly the bundled built-in plugins, both kinds. */
+const BUILTIN_KEYS: ReadonlySet<string> = new Set(
+  globalPluginRegistry.listManifests().map(manifest => formatPluginKey(manifest.id, manifest.version)),
 )
 
 const statuses = new Map<string, PluginAvailability>()
 
-export function isBuiltinMediaKey(pluginId: string, version: string): boolean {
-  return BUILTIN_MEDIA_KEYS.has(formatPluginKey(pluginId, version))
+export function isBuiltinPluginKey(pluginId: string, version: string): boolean {
+  return BUILTIN_KEYS.has(formatPluginKey(pluginId, version))
 }
 
-/** Registered built-in media keys, for boot assertions and call-site invariants. */
-export function builtinMediaKeys(): string[] {
-  return [...BUILTIN_MEDIA_KEYS]
+/** Registered built-in keys, for boot assertions and call-site invariants. */
+export function builtinPluginKeys(): string[] {
+  return [...BUILTIN_KEYS]
 }
 
 /**
@@ -50,16 +51,17 @@ export function builtinMediaKeys(): string[] {
  * registered must resolve through this gate with an empty catalog, or the worker
  * would come up serving nothing. Returns the count for boot logging.
  */
-export function assertBuiltinMediaPluginsAvailable(): number {
-  for (const key of BUILTIN_MEDIA_KEYS) {
+export function assertBuiltinPluginsAvailable(): number {
+  for (const key of BUILTIN_KEYS) {
     const { id, version } = parsePluginKey(key)
-    resolveMediaPlugin(id, version)
+    if (globalPluginRegistry.kindOf(id, version) === 'language') resolveLanguagePlugin(id, version)
+    else resolveMediaPlugin(id, version)
   }
-  return BUILTIN_MEDIA_KEYS.size
+  return BUILTIN_KEYS.size
 }
 
 export function statusOf(pluginId: string, version: string): PluginAvailability {
-  if (isBuiltinMediaKey(pluginId, version)) return 'active'
+  if (isBuiltinPluginKey(pluginId, version)) return 'active'
   return statuses.get(formatPluginKey(pluginId, version)) ?? 'untracked'
 }
 
@@ -85,7 +87,7 @@ export function forgetPluginStatus(pluginId: string, version: string): void {
 export function installedActiveCount(): number {
   let count = 0
   for (const [key, status] of statuses) {
-    if (status !== 'active' || BUILTIN_MEDIA_KEYS.has(key)) continue
+    if (status !== 'active' || BUILTIN_KEYS.has(key)) continue
     count += 1
   }
   return count
@@ -137,15 +139,16 @@ export function createMediaExecutionContext(
 }
 
 /**
- * Extra payload for `callLanguageModel`, or `undefined` to keep the built-in
- * protocol path byte-identical. This is the language kernel's availability gate:
- * `callLanguageModel` itself only checks registry membership, so a caller that
- * skipped this helper would keep using a disabled package.
+ * Extra payload for `callLanguageModel`, or `undefined` to keep the native
+ * protocol path byte-identical. This is the language kernel's availability gate
+ * for uploaded language plugins: `callLanguageModel` itself only checks registry
+ * membership, so a caller that skipped this helper would keep using a disabled
+ * package.
  *
- * A non-null `model_configs.plugin_id` does NOT mean "bound to a plugin":
- * migrate.ts backfills it on every row with ids registered nowhere
- * ('openai-language', 'anthropic-language', ...). Registry membership is the
- * only trustworthy signal, so that is what this gates on.
+ * Built-in language keys ('openai-language@1.0.0', 'anthropic-language@1.0.0' —
+ * the ids migration 0012 backfilled onto historical rows) are the native protocol
+ * path itself, so they return `undefined` too. Any other key that is not a
+ * registered language plugin also stays on the native path.
  */
 export function installedLanguagePluginBinding(input: {
   pluginId?: string | null
@@ -156,6 +159,7 @@ export function installedLanguagePluginBinding(input: {
   const pluginId = input.pluginId
   const pluginVersion = input.pluginVersion
   if (!pluginId || !pluginVersion) return undefined
+  if (isBuiltinLanguagePluginKey(pluginId, pluginVersion)) return undefined
   if (globalPluginRegistry.kindOf(pluginId, pluginVersion) !== 'language') return undefined
   resolveLanguagePlugin(pluginId, pluginVersion)
   return {

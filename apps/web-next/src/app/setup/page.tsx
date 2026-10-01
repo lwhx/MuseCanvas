@@ -1,4 +1,4 @@
-import { SetupWizard } from '@/features/setup/components/setup-wizard'
+import { SetupWizard, SetupWizardSkeleton } from '@/features/setup/components/setup-wizard'
 import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function SetupPage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center">正在加载向导...</div>}>
+    <Suspense fallback={<SetupWizardSkeleton />}>
       <SetupWizard />
     </Suspense>
   )

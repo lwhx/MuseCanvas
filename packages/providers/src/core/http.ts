@@ -1,5 +1,6 @@
 import type { SafeHttpClient, SafeHttpRequestInit, SafeHttpResponse } from './types'
 import { NormalizedProviderError, SafeHttpError } from './errors'
+import { hostMatchesAllowlist } from './url-guard'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const DEFAULT_MAX_BYTES = 50_000_000 // 50 MB
@@ -53,20 +54,7 @@ export class DefaultSafeHttpClient implements SafeHttpClient {
     const hostname = parsed.hostname.toLowerCase()
     const allowed = init.allowedHosts || this.allowedHosts
 
-    const isAllowed = allowed.some(pattern => {
-      const p = pattern.toLowerCase().trim()
-      if (p.startsWith('*.')) {
-        const suffix = p.slice(1) // e.g. .volces.com
-        return hostname.endsWith(suffix) && hostname.length > suffix.length
-      }
-      if (p.startsWith('*-')) {
-        const suffix = p.slice(1) // e.g. -aiplatform.googleapis.com
-        if (!hostname.endsWith(suffix) || hostname.length <= suffix.length) return false
-        // '*' matches a single DNS label only, so evil.com-aiplatform... cannot pass.
-        return !hostname.slice(0, hostname.length - suffix.length).includes('.')
-      }
-      return hostname === p
-    })
+    const isAllowed = hostMatchesAllowlist(hostname, allowed)
 
     if (!isAllowed) {
       throw new SafeHttpError(

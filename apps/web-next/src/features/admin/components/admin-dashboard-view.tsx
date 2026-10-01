@@ -2,9 +2,22 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
+import Link from 'next/link'
 import { api } from '@/shared/services/api'
 import type { AdminJob } from '@/shared/types'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { jobStatusMeta } from '@/shared/lib/job-status'
+import { RefreshCw } from 'lucide-react'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  SkeletonText,
+  StatCard,
+  buttonVariants,
+} from '@/shared/components/ui'
 
 interface DashboardMetrics {
   totalUsers: number
@@ -18,11 +31,15 @@ interface AdminDashboardViewProps {
   initialJobs?: AdminJob[]
 }
 
+const RECENT_JOB_LIMIT = 10
+
 export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDashboardViewProps) {
   const {
     data: metrics,
     refetch: refetchMetrics,
     isFetching: isFetchingMetrics,
+    isError: isMetricsError,
+    error: metricsError,
   } = useQuery({
     queryKey: ['admin', 'dashboard'],
     queryFn: async () => {
@@ -36,16 +53,24 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
     data: jobs,
     refetch: refetchJobs,
     isFetching: isFetchingJobs,
+    isLoading: jobsLoading,
+    isError: isJobsError,
   } = useQuery({
-    queryKey: ['admin', 'jobs', { limit: 10 }],
+    queryKey: ['admin', 'jobs', { limit: RECENT_JOB_LIMIT }],
     queryFn: async () => {
-      const res = await api<{ items: AdminJob[] }>(API_ENDPOINTS.admin.jobs, { params: { limit: 10 } })
+      const res = await api<{ items: AdminJob[] }>(API_ENDPOINTS.admin.jobs, {
+        params: { limit: RECENT_JOB_LIMIT },
+      })
       return res.data?.items || []
     },
-    initialData: initialJobs,
+    initialData: initialJobs.length ? initialJobs : undefined,
   })
 
   const refreshing = isFetchingMetrics || isFetchingJobs
+  // Skeleton only while there is nothing to show; a background refresh must not
+  // wipe the numbers the reader is looking at.
+  const metricsPending = metrics == null && isFetchingMetrics
+  const jobsPending = jobsLoading
 
   function handleRefresh() {
     refetchMetrics()
@@ -53,101 +78,144 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">系统概览</h1>
-          <p className="text-sm text-muted-foreground">查看系统汇总指标和最近任务状态。</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle disabled:opacity-50"
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="系统概览"
+        description="查看系统汇总指标和最近任务状态。"
+        actions={
+          <Button
+            variant="secondary"
+            loading={refreshing}
+            onClick={handleRefresh}
+            icon={<RefreshCw aria-hidden="true" />}
+          >
+            刷新数据
+          </Button>
+        }
+      />
+
+      {isMetricsError ? (
+        <Alert
+          tone="danger"
+          title="无法加载汇总指标"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => refetchMetrics()}>
+              刷新重试
+            </Button>
+          }
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          刷新数据
-        </button>
+          {metricsError?.message ? `${metricsError.message}。` : '服务未返回统计数据。'}
+          请检查网络连接，或稍后重试。
+        </Alert>
+      ) : null}
+
+      {/* KPI grid — 4 columns (desktop) → 2 (tablet, ≥640px) → 1 (phone), gap 24px */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="用户总数" value={metrics?.totalUsers ?? '—'} loading={metricsPending} />
+        <StatCard label="任务总数" value={metrics?.totalJobs ?? '—'} loading={metricsPending} />
+        <StatCard
+          label="7 天成功率"
+          value={metrics?.successRate7d != null ? `${metrics.successRate7d}%` : '—'}
+          loading={metricsPending}
+          className="text-success"
+        />
+        <StatCard
+          label="7 天失败任务数"
+          value={metrics?.failedJobs7d ?? '—'}
+          loading={metricsPending}
+          className="text-danger"
+        />
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
-          <p className="text-xs text-muted-foreground">用户总数</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {metrics?.totalUsers ?? '—'}
-          </p>
-        </div>
-        <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
-          <p className="text-xs text-muted-foreground">任务总数</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {metrics?.totalJobs ?? '—'}
-          </p>
-        </div>
-        <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
-          <p className="text-xs text-muted-foreground">7天成功率</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-success">
-            {metrics?.successRate7d != null ? `${metrics.successRate7d}%` : '—'}
-          </p>
-        </div>
-        <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
-          <p className="text-xs text-muted-foreground">7天失败任务</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-danger">
-            {metrics?.failedJobs7d ?? '—'}
-          </p>
-        </div>
-      </div>
-
-      {/* Recent Jobs Table */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">最近任务</h2>
-        <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-surface-subtle text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">任务 ID</th>
-                <th className="px-4 py-3 font-medium">模型</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">创建时间</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {jobs && jobs.length > 0 ? (
-                jobs.map((job) => (
-                  <tr key={job.id} className="hover:bg-surface-subtle/50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-muted-foreground">{job.id.slice(0, 8)}...</td>
-                    <td className="px-4 py-3 text-foreground font-medium">{job.modelName || '未知模型'}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ${
-                          job.status === 'succeeded'
-                            ? 'bg-success-soft text-success'
-                            : job.status === 'failed'
-                              ? 'bg-danger-soft text-danger'
-                              : job.status === 'running'
-                                ? 'bg-accent-soft text-accent-strong'
-                                : 'bg-surface-subtle text-muted-foreground'
-                        }`}
-                      >
-                        {job.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-muted-foreground">
-                      {new Date(job.createdAt).toLocaleString('zh-CN')}
+      {/* Recent jobs */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-subtitle font-normal text-foreground">最近任务</h2>
+        <Card className="gap-0 overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">最近 {RECENT_JOB_LIMIT} 条生成任务</caption>
+              <thead className="bg-tonal text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-sm font-medium">
+                    任务 ID
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-sm font-medium">
+                    模型
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-sm font-medium">
+                    状态
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
+                    创建时间
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border" aria-busy={jobsPending || undefined}>
+                {jobsPending ? (
+                  Array.from({ length: 5 }, (_, index) => (
+                    <tr key={index}>
+                      <td className="px-4 py-3"><SkeletonText width="7rem" /></td>
+                      <td className="px-4 py-3"><SkeletonText width="9rem" /></td>
+                      <td className="px-4 py-3"><SkeletonText width="5rem" /></td>
+                      <td className="px-4 py-3 text-right"><SkeletonText width="8rem" className="ml-auto" /></td>
+                    </tr>
+                  ))
+                ) : isJobsError ? (
+                  <tr>
+                    <td colSpan={4}>
+                      <EmptyState
+                        variant="error"
+                        objectName="最近任务"
+                        density="compact"
+                        actionLabel="刷新重试"
+                        onAction={() => refetchJobs()}
+                      />
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                    暂无任务数据
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                ) : jobs && jobs.length > 0 ? (
+                  jobs.map((job) => {
+                    const status = jobStatusMeta(job.status)
+                    return (
+                      <tr
+                        key={job.id}
+                        className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
+                      >
+                        <td className="px-4 py-3 font-mono text-muted-foreground">{job.id.slice(0, 8)}…</td>
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          {job.modelName || '未知模型'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge className={status.badge}>{status.label}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {new Date(job.createdAt).toLocaleString('zh-CN')}
+                        </td>
+                      </tr>
+                    )
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={4}>
+                      <EmptyState
+                        variant="first-use"
+                        objectName="生成任务"
+                        density="compact"
+                        title="还没有生成任务"
+                        description="用户开始创作后，最近的任务会出现在这里。"
+                        action={
+                          <Link href="/admin/jobs" className={buttonVariants({ variant: 'secondary' })}>
+                            查看全部任务
+                          </Link>
+                        }
+                      />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </section>
     </div>
   )
 }

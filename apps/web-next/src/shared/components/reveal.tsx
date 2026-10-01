@@ -6,12 +6,16 @@ import type { CSSProperties, ReactNode } from 'react'
 interface RevealProps {
   children: ReactNode
   className?: string
-  /** 0-based stagger step; each step is `--stagger-step` (50ms), clamped to 8. */
+  /** 0-based section step. The spacing comes from `--stagger-step-page` (100ms),
+   *  so callers pass the plain index — `index * 2` hacks are what the token
+   *  override replaces. Clamped to 8 steps in `globals.css`. */
   staggerIndex?: number
 }
 
 /**
- * Scroll-triggered fade-in-up entrance for marketing-style sections.
+ * Scroll-triggered page-level entrance (fade-in-up over `--motion-page` 400ms,
+ * ease-out) for marketing-style sections, with the section rhythm of 100ms taken
+ * from `--stagger-step-page` rather than an eyeballed multiplier at the call site.
  *
  * SSR and first paint render the final visible state (no-JS and slow-hydration
  * safe); after hydration an IntersectionObserver hides below-fold blocks and
@@ -47,10 +51,14 @@ export function Reveal({ children, className = '', staggerIndex }: RevealProps) 
   return (
     <div
       ref={ref}
-      style={{ '--stagger-index': staggerIndex ?? 0 } as CSSProperties}
-      className={`${className} ${
-        visible ? 'motion-reveal motion-stagger' : 'opacity-0'
-      }`}
+      style={
+        {
+          '--stagger-index': staggerIndex ?? 0,
+          // The marketing rhythm is 100ms per section, not the 50ms list step.
+          '--stagger-step': 'var(--stagger-step-page)',
+        } as CSSProperties
+      }
+      className={`${className} ${visible ? 'motion-page motion-stagger' : 'opacity-0'}`}
     >
       {children}
     </div>

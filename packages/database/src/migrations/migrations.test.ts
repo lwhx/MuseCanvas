@@ -68,7 +68,9 @@ test('migration filenames are well formed, contiguous and unique', () => {
   versions.forEach((version, index) => {
     assert.equal(Number(version), index + 1, `versions must count up from 0001 without gaps, found ${version} at position ${index}`)
   })
-  assert.equal(versions[versions.length - 1], BASELINE_MAX_VERSION, 'BASELINE_MAX_VERSION must point at the last baseline migration')
+  // The split's last file; every migration after it is an ordinary sequential one.
+  assert.ok(versions.includes(BASELINE_MAX_VERSION), 'BASELINE_MAX_VERSION must name an existing migration')
+  assert.equal(loadMigrations().find(migration => migration.version === BASELINE_MAX_VERSION)?.name, 'asset_thumbnails')
 })
 
 test('every table is created by exactly one migration', () => {

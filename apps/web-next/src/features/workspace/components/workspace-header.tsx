@@ -1,33 +1,69 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { LogOut, Menu, Settings, X } from 'lucide-react'
 import type { GenerateModeTab, User } from '@/shared/types'
 import { useLogout } from '@/shared/hooks/useAuth'
+import { useDialog } from '@/shared/hooks/useDialog'
 import { useGenerationMode } from '@/shared/hooks/useGenerationMode'
 import { GENERATE_ROUTE } from '@/shared/lib/app-routes'
-import { navLabelFor, resolveActiveNavKey, workspaceNavItems } from '../lib/workspace-nav'
-import { ThemeToggle } from '@/shared/components/ui/theme-toggle'
-import { LogOut, Menu, Settings, X } from 'lucide-react'
+import { cn } from '@/shared/lib/cn'
+import { Avatar, DropdownMenu, IconButton, ThemeToggle, buttonVariants } from '@/shared/components/ui'
+import { ACCOUNT_ROUTE, ADMIN_ROUTE, navLabelFor, resolveActiveNavKey, workspaceNavItems } from '../lib/workspace-nav'
 
 interface WorkspaceHeaderProps {
   initialUser: User
 }
 
-/** Shared by the desktop nav and the mobile drawer so the two cannot disagree. */
+/**
+ * `--breakpoint-md` is 960px in the token contract, so the media query has to say
+ * 60rem — the previous 48rem kept the drawer open on tablets that were already
+ * showing the desktop nav.
+ */
+const WORKSPACE_DESKTOP_BREAKPOINT_QUERY = '(min-width: 60rem)'
+
+/** Scrim for the drawer: `--color-overlay` at `--opacity-overlay` (40% light, 55% dark). */
+const SCRIM_BACKGROUND = 'color-mix(in srgb, var(--color-overlay) calc(var(--opacity-overlay) * 100%), transparent)'
+
+/**
+ * Shared by the desktop nav and the mobile drawer so the two cannot disagree.
+ * The current entry is `tonal-selected` plus a 3px primary bar (foundations →
+ * 选中态); brand green never marks selection.
+ */
 const navItemClass = (isActive: boolean) =>
-  `flex min-h-10 items-center gap-1.5 rounded-[var(--radius-control)] px-3 text-sm font-medium transition-colors ${
-    isActive
-      ? 'bg-surface-subtle text-foreground'
-      : 'text-muted-foreground hover:bg-surface-subtle hover:text-foreground'
-  }`
+  cn(
+    'relative flex min-h-[var(--control-md)] items-center gap-2 rounded-control px-3 text-sm font-medium',
+    'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+    isActive ? 'bg-tonal-selected text-foreground' : 'text-muted-foreground hover:bg-tonal hover:text-foreground',
+  )
+
+/** `orientation` follows the nav: the desktop bar underlines, the drawer rules on the left. */
+const activeBarClass = (horizontal: boolean) =>
+  horizontal
+    ? 'absolute inset-x-2 bottom-0 h-[3px] rounded-pill bg-primary'
+    : 'absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-primary'
 
 export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  // The account menu's keyboard / outside-click behaviour lives in `DropdownMenu`;
+  // this stays the single reason the header holds the state — a route change or the
+  // drawer opening has to close a menu the header is no longer looking at.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+  const {
+    mounted: drawerMounted,
+    phase: drawerPhase,
+    labelId: drawerLabelId,
+    closeButtonRef: drawerCloseButtonRef,
+    portalTarget: drawerPortalTarget,
+    rootProps: drawerRootProps,
+    dialogProps: drawerDialogProps,
+  } = useDialog({ open: drawerOpen, onClose: closeDrawer })
   const { mode, selectMode } = useGenerationMode()
 
   const logoutMutation = useLogout()
@@ -39,9 +75,23 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
   // is live — `mode` has to come in. See `resolveActiveNavKey`.
   const activeKey = resolveActiveNavKey(pathname, mode)
   const currentPageName = navLabelFor(activeKey)
+  const isGenerateRoute = pathname === GENERATE_ROUTE
+
+  useEffect(() => {
+    closeDrawer()
+    setMenuOpen(false)
+  }, [pathname, closeDrawer])
+
+  useEffect(() => {
+    const breakpoint = window.matchMedia(WORKSPACE_DESKTOP_BREAKPOINT_QUERY)
+    const closeOnDesktop = () => {
+      if (breakpoint.matches) closeDrawer()
+    }
+    breakpoint.addEventListener('change', closeOnDesktop)
+    return () => breakpoint.removeEventListener('change', closeOnDesktop)
+  }, [closeDrawer])
 
   async function handleLogout() {
-    setUserMenuOpen(false)
     await logoutMutation.mutateAsync()
     router.push('/login')
     router.refresh()
@@ -49,152 +99,156 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
 
   /** Mode entries also close the drawer; the route entries do it on their Link. */
   function handleModeSelect(next: GenerateModeTab) {
-    setDrawerOpen(false)
+    closeDrawer()
     selectMode(next)
   }
 
   return (
     <>
-      <header className="flex h-16 shrink-0 items-center gap-3 bg-surface px-4 shadow-md sm:px-6">
-        <Link
-          href={GENERATE_ROUTE}
-          className="flex items-center gap-2 rounded-[var(--radius-control)] text-foreground focus:outline-none"
-          aria-label="MuseCanvas 创作台"
+      <header className="relative z-sticky flex h-[var(--layout-header)] shrink-0 items-center bg-surface shadow-soft">
+        <div
+          className={cn(
+            'flex w-full items-center gap-3 px-4 sm:px-6',
+            !isGenerateRoute && 'mx-auto max-w-content',
+          )}
         >
-          <span className="text-xl font-bold tracking-tight text-foreground">MuseCanvas</span>
-        </Link>
+          <Link
+            href={GENERATE_ROUTE}
+            className="shrink-0 rounded-control text-subtitle font-medium tracking-tight text-foreground"
+            aria-label="MuseCanvas 创作台"
+          >
+            MuseCanvas
+          </Link>
 
-        {/* Desktop nav */}
-        <nav className="hidden items-center gap-1 md:flex" aria-label="主导航">
-          {workspaceNavItems.map((item) => {
-            const isActive = item.key === activeKey
-            if (item.kind === 'route') {
+          {/* Desktop nav */}
+          <nav className="hidden items-center gap-1 md:flex" aria-label="主导航">
+            {workspaceNavItems.map((item) => {
+              const isActive = item.key === activeKey
+              if (item.kind === 'route') {
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={navItemClass(isActive)}
+                  >
+                    {isActive ? <span aria-hidden="true" className={activeBarClass(true)} /> : null}
+                    {item.label}
+                  </Link>
+                )
+              }
+              const Icon = item.icon
               return (
-                <Link
+                <button
                   key={item.key}
-                  href={item.href}
+                  type="button"
+                  onClick={() => handleModeSelect(item.mode)}
                   aria-current={isActive ? 'page' : undefined}
                   className={navItemClass(isActive)}
                 >
+                  {isActive ? <span aria-hidden="true" className={activeBarClass(true)} /> : null}
+                  <Icon className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
                   {item.label}
-                </Link>
+                </button>
               )
-            }
-            const Icon = item.icon
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => handleModeSelect(item.mode)}
-                aria-current={isActive ? 'true' : undefined}
-                className={navItemClass(isActive)}
+            })}
+          </nav>
+
+          {/* Mobile: page name */}
+          <span className="min-w-0 truncate text-sm font-medium text-foreground md:hidden">{currentPageName}</span>
+
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+            <ThemeToggle />
+
+            {isAdmin && (
+              <Link
+                href={ADMIN_ROUTE}
+                className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'hidden md:inline-flex')}
               >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                {item.label}
-              </button>
-            )
-          })}
-        </nav>
-
-        {/* Mobile: page name */}
-        <span className="text-sm font-medium text-foreground md:hidden">{currentPageName}</span>
-
-        <div className="ml-auto flex items-center gap-2">
-          <ThemeToggle />
-
-          {/* Admin link if admin */}
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className="hidden min-h-10 items-center rounded-[var(--radius-control)] px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-subtle hover:text-foreground md:inline-flex"
-            >
-              管理后台
-            </Link>
-          )}
-
-          {/* User Popover menu */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-subtle text-sm font-medium text-foreground transition-colors hover:bg-surface-subtle-strong focus:outline-none"
-              aria-label={`账户菜单：${initialUser.email || '当前用户'}`}
-              aria-haspopup="menu"
-              aria-expanded={userMenuOpen}
-            >
-              {userInitial}
-            </button>
-
-            {userMenuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setUserMenuOpen(false)}
-                  aria-hidden="true"
-                />
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full z-50 mt-2 min-w-[200px] rounded-[var(--radius-card)] border border-border bg-surface p-1 shadow-lg"
-                >
-                  <p className="truncate px-3 py-1.5 text-xs text-muted-foreground">
-                    {initialUser.email}
-                  </p>
-                  <Link
-                    href="/account"
-                    onClick={() => setUserMenuOpen(false)}
-                    className="flex min-h-10 w-full items-center gap-2 rounded-[var(--radius-control)] px-3 text-left text-sm text-foreground transition-colors hover:bg-surface-subtle"
-                  >
-                    <Settings className="h-4 w-4" aria-hidden="true" />
-                    安全设置
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    disabled={logoutMutation.isPending}
-                    className="flex min-h-10 w-full items-center gap-2 rounded-[var(--radius-control)] px-3 text-left text-sm text-danger transition-colors hover:bg-danger-soft/20"
-                  >
-                    <LogOut className="h-4 w-4" aria-hidden="true" />
-                    退出登录
-                  </button>
-                </div>
-              </>
+                管理后台
+              </Link>
             )}
-          </div>
 
-          {/* Mobile menu hamburger */}
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-surface-subtle hover:text-foreground md:hidden"
-            aria-label="打开导航菜单"
-          >
-            <Menu className="h-5 w-5" aria-hidden="true" />
-          </button>
+            {/* Account menu — trigger, panel and keyboard contract are all
+                `DropdownMenu`'s; the header only names the entries. */}
+            <DropdownMenu
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              triggerLabel={`账户菜单：${initialUser.email || '当前用户'}`}
+              trigger={<Avatar size="md" initial={userInitial} surface="transparent" />}
+              triggerClassName={cn(
+                'h-[var(--control-md)] w-[var(--control-md)] text-sm font-medium text-foreground',
+                menuOpen ? 'bg-tonal-selected' : 'bg-tonal hover:bg-tonal-hover active:bg-tonal-active',
+              )}
+              menuLabel="账户菜单"
+              header={
+                <p className="truncate px-3 py-2 text-xs text-muted-foreground">{initialUser.email}</p>
+              }
+              items={[
+                { id: 'account', label: '安全设置', href: ACCOUNT_ROUTE, icon: <Settings aria-hidden="true" /> },
+                {
+                  id: 'logout',
+                  label: '退出登录',
+                  icon: <LogOut aria-hidden="true" />,
+                  danger: true,
+                  loading: logoutMutation.isPending,
+                  onSelect: () => void handleLogout(),
+                },
+              ]}
+            />
+
+            {/* Mobile navigation trigger */}
+            <IconButton
+              variant="ghost"
+              className="md:hidden"
+              aria-label="打开导航菜单"
+              onClick={() => {
+                setMenuOpen(false)
+                setDrawerOpen(true)
+              }}
+              icon={<Menu className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+            />
+          </div>
         </div>
       </header>
 
       {/* Mobile Drawer */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+      {drawerMounted && drawerPortalTarget && createPortal(
+        <div
+          {...drawerRootProps}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeDrawer()
+          }}
+          className={`fixed inset-0 z-modal md:hidden ${
+            drawerPhase === 'close' ? 'motion-fade-out pointer-events-none' : 'motion-fade-in'
+          }`}
+        >
           <div
-            className="fixed inset-0 bg-overlay/40 transition-opacity"
-            onClick={() => setDrawerOpen(false)}
+            className="fixed inset-0"
+            style={{ backgroundColor: SCRIM_BACKGROUND }}
+            onClick={closeDrawer}
             aria-hidden="true"
           />
-          <div className="motion-drawer-in fixed inset-y-0 right-0 z-50 flex w-full max-w-xs flex-col bg-surface p-6 shadow-xl">
-            <div className="flex items-center justify-between pb-4">
-              <span className="font-medium text-foreground">导航菜单</span>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(false)}
-                className="rounded-[var(--radius-control)] p-1 text-muted-foreground hover:text-foreground"
-                aria-label="关闭"
-              >
-                <X className="h-5 w-5" />
-              </button>
+          <div
+            {...drawerDialogProps}
+            className={`fixed inset-y-0 right-0 flex w-full max-w-xs flex-col bg-surface p-6 shadow-drawer ${
+              drawerPhase === 'close' ? 'motion-drawer-out-right' : 'motion-drawer-in'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <h2 id={drawerLabelId} className="text-module text-foreground">
+                导航菜单
+              </h2>
+              <IconButton
+                ref={drawerCloseButtonRef}
+                variant="ghost"
+                aria-label="关闭导航菜单"
+                onClick={closeDrawer}
+                icon={<X className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+              />
             </div>
 
-            <nav className="mt-4 flex flex-col gap-1" aria-label="抽屉导航">
+            <nav className="mt-6 flex flex-col gap-1" aria-label="抽屉导航">
               {workspaceNavItems.map((item) => {
                 const isActive = item.key === activeKey
                 if (item.kind === 'route') {
@@ -202,10 +256,11 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                     <Link
                       key={item.key}
                       href={item.href}
-                      onClick={() => setDrawerOpen(false)}
+                      onClick={closeDrawer}
                       aria-current={isActive ? 'page' : undefined}
                       className={navItemClass(isActive)}
                     >
+                      {isActive ? <span aria-hidden="true" className={activeBarClass(false)} /> : null}
                       {item.label}
                     </Link>
                   )
@@ -216,29 +271,29 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                     key={item.key}
                     type="button"
                     onClick={() => handleModeSelect(item.mode)}
-                    aria-current={isActive ? 'true' : undefined}
-                    className={`${navItemClass(isActive)} w-full text-left`}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn(navItemClass(isActive), 'w-full text-left')}
                   >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {isActive ? <span aria-hidden="true" className={activeBarClass(false)} /> : null}
+                    <Icon className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
                     {item.label}
                   </button>
                 )
               })}
 
               {isAdmin && (
-                <div className="mt-6">
-                  <Link
-                    href="/admin"
-                    onClick={() => setDrawerOpen(false)}
-                    className="flex min-h-10 items-center gap-2 rounded-[var(--radius-control)] px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-subtle hover:text-foreground"
-                  >
-                    管理后台
-                  </Link>
-                </div>
+                <Link
+                  href={ADMIN_ROUTE}
+                  onClick={closeDrawer}
+                  className={cn(buttonVariants({ variant: 'ghost' }), 'mt-6 w-full justify-start')}
+                >
+                  管理后台
+                </Link>
               )}
             </nav>
           </div>
-        </div>
+        </div>,
+        drawerPortalTarget,
       )}
     </>
   )

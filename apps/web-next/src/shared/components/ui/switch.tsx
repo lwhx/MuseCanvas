@@ -1,66 +1,97 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
+import { cn } from '@/shared/lib/cn'
 
 interface SwitchProps {
   checked: boolean
   onCheckedChange: (checked: boolean) => void
-  /** Accessible name. Pair with a visible label via `labelledBy` when one exists. */
+  /** Accessible name. Pair with a visible label via `aria-labelledby` when one exists. */
   'aria-label'?: string
   'aria-labelledby'?: string
   disabled?: boolean
 }
 
+/** Track 32px (`--control-sm`) × 56px, thumb 24px (`--control-xs`) with a 3px
+ *  inset, so the glide distance is exactly 24px. */
+const TRACK_CLASS = 'inline-flex h-[var(--control-sm)] w-14 shrink-0 cursor-pointer items-center rounded-pill border p-[3px]'
+
+/** Appended to the accessible name after a rejected save: the control says out
+ *  loud that nothing was persisted, instead of silently looking unchanged. */
+const FAILURE_SUFFIX = '，保存失败，设置未更改'
+const PENDING_SUFFIX = '，正在保存'
+
 /**
- * Immediate-setting toggle: tonal track, clear thumb, and honest failure
- * handling — if `onCheckedChange` throws/rejects, the thumb springs back to
- * the previous value so the control never lies about what was persisted.
- * Native button semantics give Enter/Space activation for free.
+ * Immediate-setting toggle: a tonal track that keeps a `border-control` outline so
+ * the OFF state is never read from a lightness difference alone (states.md:
+ * 不靠浅色差辨认), and a solid ink track when ON. The thumb glides on
+ * `--motion-fast` (120ms) inside the spec's 120–180ms window.
+ *
+ * Native button semantics give Enter/Space activation for free. While a save is
+ * running the control keeps its width, its name and — deliberately — its focus:
+ * it is not `disabled` during the round trip (that would drop the keyboard user's
+ * place), it just ignores further activation and reports `aria-busy`. If
+ * `onCheckedChange` throws or rejects, the thumb never moved (the `checked` prop is
+ * the only source of truth) and the failure is stated in the name.
  */
-export function Switch({ checked, onCheckedChange, disabled, ...aria }: SwitchProps) {
+export function Switch({ checked, onCheckedChange, disabled = false, ...aria }: SwitchProps) {
   const [pending, setPending] = useState(false)
-  const lastError = useRef('')
+  const [failed, setFailed] = useState(false)
 
   const handleToggle = async () => {
+    // Guards, not just the `disabled` attribute: `pending` must block repeat
+    // submissions without ever taking focus away from the control.
     if (disabled || pending) return
     const next = !checked
     setPending(true)
+    setFailed(false)
     try {
       await onCheckedChange(next)
-      lastError.current = ''
+      setFailed(false)
     } catch {
-      // Visual state never moved (checked prop unchanged) — the failure is the
-      // caller's to surface; remember it for the accessible name.
-      lastError.current = '，保存失败，设置未更改'
+      setFailed(true)
     } finally {
       setPending(false)
     }
   }
+
+  const label = aria['aria-label']
+  const name = label ? `${label}，${checked ? '已开启' : '已关闭'}${pending ? PENDING_SUFFIX : ''}${failed ? FAILURE_SUFFIX : ''}` : undefined
 
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      disabled={disabled || pending}
+      aria-busy={pending || undefined}
+      disabled={disabled}
       onClick={handleToggle}
-      className={`inline-flex h-10 min-w-14 items-center rounded-pill px-2 transition-colors motion-press ${
-        checked ? 'justify-end bg-primary' : 'justify-start bg-surface-subtle-strong'
-      } ${disabled ? 'opacity-50' : ''}`}
       {...aria}
-      aria-label={
-        aria['aria-label']
-          ? `${aria['aria-label']}${checked ? '，已开启' : '，已关闭'}${lastError.current}`
-          : undefined
-      }
+      aria-label={name}
+      className={cn(
+        TRACK_CLASS,
+        'transition-[background-color,border-color] motion-press',
+        checked ? 'border-primary bg-primary' : 'border-border-control bg-tonal',
+        pending && 'cursor-wait',
+        disabled && 'is-disabled',
+      )}
+      style={{ transitionDuration: 'var(--motion-base)', transitionTimingFunction: 'var(--ease-standard)' }}
     >
       <span
         aria-hidden="true"
-        className={`h-5 w-5 rounded-full shadow-sm transition-transform motion-hover-fade ${
-          checked ? 'bg-foreground-inverse' : 'bg-surface'
-        }`}
-        style={{ transitionDuration: 'var(--motion-base)' }}
-      />
+        className={cn(
+          'flex h-[var(--control-xs)] w-[var(--control-xs)] items-center justify-center rounded-pill border',
+          'motion-hover-fade',
+          checked ? 'translate-x-6 border-transparent bg-on-primary' : 'border-border-control bg-surface',
+        )}
+      >
+        {pending ? (
+          <Loader2
+            className={cn('h-3 w-3 motion-spin', checked ? 'text-primary' : 'text-muted-foreground')}
+          />
+        ) : null}
+      </span>
     </button>
   )
 }

@@ -1,8 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
+import { Moon, Sun } from 'lucide-react'
+import { cn } from '@/shared/lib/cn'
 
 export type Theme = 'light' | 'dark'
+
+const THEME_STORAGE_KEY = 'muse-theme'
 
 export function getTheme(): Theme {
   if (typeof document === 'undefined') return 'light'
@@ -12,50 +16,57 @@ export function getTheme(): Theme {
 export function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme
   try {
-    localStorage.setItem('muse-theme', theme)
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
   } catch {
     // Storage can be unavailable (private mode); the toggle still works for
     // this session because the attribute drives every token.
   }
 }
 
-/**
- * Sun/Moon toggle for the `[data-theme]` switch in `globals.css`. Reads the
- * attribute (set pre-paint by the inline script in the root layout) instead of
- * holding its own source of truth, so OS-preference fallbacks and manual
- * choices always render one consistent state.
- */
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('light')
+/** The `data-theme` attribute is the single source of truth — the inline script in
+ *  the root `<head>` sets it before first paint, and the OS preference can change
+ *  under us — so the toggle subscribes to the attribute instead of holding its own
+ *  copy of the state. */
+function subscribe(onStoreChange: () => void) {
+  const observer = new MutationObserver(onStoreChange)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  return () => observer.disconnect()
+}
 
-  useEffect(() => {
-    setTheme(getTheme())
-  }, [])
+const getServerTheme = (): Theme => 'light'
+
+/**
+ * Sun/Moon control for the `[data-theme]` switch in `globals.css`.
+ *
+ * Both glyphs ship in the markup and CSS picks one through the `dark:` variant, so
+ * the icon shown on the very first paint is already the right one: no wrong-icon
+ * flash, and the server HTML matches the client's hydration output. `aria-pressed`
+ * and `aria-label` carry the current state and the action, and the hit target is a
+ * 40px control (`--control-md`).
+ */
+export function ThemeToggle({ className }: { className?: string }) {
+  const theme = useSyncExternalStore(subscribe, getTheme, getServerTheme)
+  const isDark = theme === 'dark'
 
   const toggle = useCallback(() => {
-    const next = getTheme() === 'dark' ? 'light' : 'dark'
-    applyTheme(next)
-    setTheme(next)
+    applyTheme(getTheme() === 'dark' ? 'light' : 'dark')
   }, [])
 
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
-      aria-pressed={theme === 'dark'}
-      className="inline-flex h-10 w-10 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-surface-subtle hover:text-foreground motion-press"
-    >
-      {theme === 'dark' ? (
-        <svg width="18" height="18" viewBox="0 0 256 256" fill="none" aria-hidden="true">
-          <circle cx="128" cy="128" r="60" stroke="currentColor" strokeWidth="16" />
-          <path d="M128 20v28M128 208v28M20 128h28M208 128h28M51.7 51.7l19.8 19.8M184.5 184.5l19.8 19.8M204.3 51.7l-19.8 19.8M71.5 184.5l-19.8 19.8" stroke="currentColor" strokeWidth="16" strokeLinecap="round" />
-        </svg>
-      ) : (
-        <svg width="18" height="18" viewBox="0 0 256 256" fill="none" aria-hidden="true">
-          <path d="M216.7 152.6A88 88 0 0 1 103.4 39.3a88 88 0 1 0 113.3 113.3Z" stroke="currentColor" strokeWidth="16" strokeLinejoin="round" />
-        </svg>
+      aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
+      aria-pressed={isDark}
+      className={cn(
+        'inline-flex h-[var(--control-md)] w-[var(--control-md)] items-center justify-center rounded-control',
+        'text-muted-foreground transition-colors hover:bg-tonal hover:text-foreground motion-press',
+        className,
       )}
+      style={{ transitionDuration: 'var(--motion-fast)', transitionTimingFunction: 'var(--ease-standard)' }}
+    >
+      <Sun aria-hidden="true" className="block h-[var(--icon-md)] w-[var(--icon-md)] dark:hidden" />
+      <Moon aria-hidden="true" className="hidden h-[var(--icon-md)] w-[var(--icon-md)] dark:block" />
     </button>
   )
 }

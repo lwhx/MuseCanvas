@@ -1,16 +1,43 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
-import type { AdminUser, Invitation } from '@/shared/types'
-import { Loader2, RefreshCw, UserPlus } from 'lucide-react'
-import { Dialog } from '@/shared/components/ui/dialog'
+import type { AdminUser, Invitation, UserRole } from '@/shared/types'
+import { RefreshCw, UserPlus } from 'lucide-react'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  EmptyState,
+  FormField,
+  Input,
+  PageHeader,
+  SkeletonText,
+  SkeletonTile,
+  Tabs,
+} from '@/shared/components/ui'
+import type { BadgeTone, TabItem } from '@/shared/components/ui'
+
+const ROLE_META: Record<UserRole, { label: string; tone: BadgeTone }> = {
+  admin: { label: '管理员', tone: 'accent' },
+  user: { label: '普通用户', tone: 'neutral' },
+}
+
+function invitationStatus(invitation: Invitation): { label: string; tone: BadgeTone } {
+  if (invitation.used) return { label: '已使用', tone: 'danger' }
+  if (invitation.revoked) return { label: '已撤销', tone: 'neutral' }
+  return { label: '有效', tone: 'success' }
+}
+
+type AdminUsersTab = 'users' | 'invitations'
 
 export function AdminUsersView() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'users' | 'invitations'>('users')
+  const [activeTab, setActiveTab] = useState<AdminUsersTab>('users')
 
   const [actionError, setActionError] = useState<string>('')
 
@@ -21,6 +48,8 @@ export function AdminUsersView() {
   const {
     data: users = [],
     isLoading: usersLoading,
+    isError: usersError,
+    isFetching: usersFetching,
     refetch: refetchUsers,
   } = useQuery({
     queryKey: ['admin', 'users'],
@@ -33,6 +62,8 @@ export function AdminUsersView() {
   const {
     data: invitations = [],
     isLoading: invitesLoading,
+    isError: invitesError,
+    isFetching: invitesFetching,
     refetch: refetchInvites,
   } = useQuery({
     queryKey: ['admin', 'invitations'],
@@ -51,7 +82,7 @@ export function AdminUsersView() {
         body: { email: inviteEmail.trim() || undefined },
       })
       if (!res.success) {
-        throw new Error(res.error?.message || '创建邀请码失败')
+        throw new Error(res.error?.message || '服务端拒绝了创建请求')
       }
       return res.data
     },
@@ -60,223 +91,265 @@ export function AdminUsersView() {
       setInviteEmail('')
       queryClient.invalidateQueries({ queryKey: ['admin', 'invitations'] })
     },
-    onError: (err: any) => {
-      setActionError(err.message || '创建邀请码失败')
+    onError: (err: unknown) => {
+      const reason = err instanceof Error && err.message ? err.message : '网络请求未完成'
+      setActionError(`${reason}。请检查限定邮箱格式后重试；若邮箱无误，请稍后再次创建。`)
     },
   })
 
+  const refreshing = activeTab === 'users' ? usersFetching : invitesFetching
+  function handleRefresh() {
+    if (activeTab === 'users') refetchUsers()
+    else refetchInvites()
+  }
+
+  function openInviteDialog() {
+    setActionError('')
+    createInviteMutation.reset()
+    setInviteModalOpen(true)
+  }
+
+  const tabs: TabItem[] = [
+    {
+      id: 'users',
+      label: `注册用户 (${users.length})`,
+      content: (
+        <Card className="gap-0 overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">注册用户列表</caption>
+              <thead className="bg-tonal text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-sm font-medium">
+                    邮箱
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-sm font-medium">
+                    角色
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
+                    注册时间
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border" aria-busy={usersLoading || undefined}>
+                {usersLoading ? (
+                  Array.from({ length: 5 }, (_, index) => (
+                    <tr key={index}>
+                      <td className="px-4 py-3"><SkeletonText width="14rem" /></td>
+                      <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" /></td>
+                      <td className="px-4 py-3 text-right"><SkeletonText width="7rem" /></td>
+                    </tr>
+                  ))
+                ) : usersError ? (
+                  <tr>
+                    <td colSpan={3}>
+                      <EmptyState
+                        variant="error"
+                        objectName="用户列表"
+                        title="无法加载用户列表"
+                        description="请求用户数据时出现问题，可能是服务暂时不可用。请稍后重试，或检查后端服务状态。"
+                        actionLabel="刷新重试"
+                        onAction={() => refetchUsers()}
+                      />
+                    </td>
+                  </tr>
+                ) : users.length > 0 ? (
+                  users.map((u) => {
+                    const role = ROLE_META[u.role] ?? ROLE_META.user
+                    return (
+                      <tr
+                        key={u.id}
+                        className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
+                      >
+                        <td className="px-4 py-3 font-medium text-foreground">{u.email}</td>
+                        <td className="px-4 py-3">
+                          <Badge tone={role.tone}>{role.label}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {new Date(u.createdAt).toLocaleDateString('zh-CN')}
+                        </td>
+                      </tr>
+                    )
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={3}>
+                      <EmptyState
+                        variant="first-use"
+                        objectName="注册用户"
+                        density="compact"
+                        title="还没有注册用户"
+                        description="用户通过登录或邀请码注册后，会显示在这里。"
+                      />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ),
+    },
+    {
+      id: 'invitations',
+      label: `邀请码 (${invitations.length})`,
+      content: (
+        <Card className="gap-0 overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">邀请码列表</caption>
+              <thead className="bg-tonal text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-sm font-medium">
+                    邀请码标识
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-sm font-medium">
+                    状态
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
+                    创建时间
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border" aria-busy={invitesLoading || undefined}>
+                {invitesLoading ? (
+                  Array.from({ length: 5 }, (_, index) => (
+                    <tr key={index}>
+                      <td className="px-4 py-3"><SkeletonText width="12rem" /></td>
+                      <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" /></td>
+                      <td className="px-4 py-3 text-right"><SkeletonText width="7rem" /></td>
+                    </tr>
+                  ))
+                ) : invitesError ? (
+                  <tr>
+                    <td colSpan={3}>
+                      <EmptyState
+                        variant="error"
+                        objectName="邀请码列表"
+                        title="无法加载邀请码列表"
+                        description="请求邀请码数据时出现问题，可能是服务暂时不可用。请稍后重试，或检查后端服务状态。"
+                        actionLabel="刷新重试"
+                        onAction={() => refetchInvites()}
+                      />
+                    </td>
+                  </tr>
+                ) : invitations.length > 0 ? (
+                  invitations.map((inv) => {
+                    const status = invitationStatus(inv)
+                    return (
+                      <tr
+                        key={inv.id}
+                        className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
+                      >
+                        <td className="px-4 py-3 font-mono tabular-nums text-foreground">{inv.code || inv.id}</td>
+                        <td className="px-4 py-3">
+                          <Badge tone={status.tone}>{status.label}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {new Date(inv.createdAt).toLocaleDateString('zh-CN')}
+                        </td>
+                      </tr>
+                    )
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={3}>
+                      <EmptyState
+                        variant="first-use"
+                        objectName="邀请码"
+                        density="compact"
+                        title="还没有邀请码"
+                        description="创建邀请码后，把它发给需要注册的用户即可。"
+                        onAction={openInviteDialog}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">用户与邀请管理</h1>
-          <p className="text-sm text-muted-foreground">管理注册用户、角色权限与测试邀请码。</p>
-        </div>
-        <div className="flex gap-2">
-          {activeTab === 'invitations' && (
-            <button
-              type="button"
-              onClick={() => {
-                setActionError('')
-                setInviteModalOpen(true)
-              }}
-              className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-3 text-xs font-medium text-accent-contrast transition-colors hover:bg-accent-hover"
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="用户与邀请管理"
+        description="管理注册用户、角色权限与测试邀请码。"
+        actions={
+          <>
+            {activeTab === 'invitations' && (
+              <Button onClick={openInviteDialog} icon={<UserPlus aria-hidden="true" />}>
+                创建邀请码
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={handleRefresh}
+              loading={refreshing}
+              icon={<RefreshCw aria-hidden="true" />}
             >
-              <UserPlus className="h-3.5 w-3.5" />
-              创建邀请码
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => (activeTab === 'users' ? refetchUsers() : refetchInvites())}
-            className="flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:bg-surface-subtle"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            刷新
-          </button>
-        </div>
-      </div>
+              刷新
+            </Button>
+          </>
+        }
+      />
 
-      {/* Tabs */}
-      <div className="flex border-b border-border">
-        <button
-          type="button"
-          onClick={() => setActiveTab('users')}
-          className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'users'
-              ? 'border-accent text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          注册用户 ({users.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('invitations')}
-          className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'invitations'
-              ? 'border-accent text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          邀请码 ({invitations.length})
-        </button>
-      </div>
-
-      {/* Users Tab */}
-      {activeTab === 'users' && (
-        <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-surface-subtle text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">邮箱</th>
-                <th className="px-4 py-3 font-medium">角色</th>
-                <th className="px-4 py-3 font-medium">注册时间</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {usersLoading ? (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                  </td>
-                </tr>
-              ) : users.length > 0 ? (
-                users.map((u) => (
-                  <tr key={u.id} className="hover:bg-surface-subtle/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">{u.email}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ${
-                          u.role === 'admin'
-                            ? 'bg-accent-soft text-accent-strong'
-                            : 'bg-surface-subtle text-muted-foreground'
-                        }`}
-                      >
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                      {new Date(u.createdAt).toLocaleDateString('zh-CN')}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                    暂无用户
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Invitations Tab */}
-      {activeTab === 'invitations' && (
-        <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-surface-subtle text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">邀请码标识</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">创建时间</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {invitesLoading ? (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                  </td>
-                </tr>
-              ) : invitations.length > 0 ? (
-                invitations.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-surface-subtle/50 transition-colors">
-                    <td className="px-4 py-3 font-mono font-bold text-foreground">{inv.code || inv.id}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ${
-                          inv.used
-                            ? 'bg-danger-soft text-danger'
-                            : inv.revoked
-                              ? 'bg-surface-subtle text-muted-foreground'
-                              : 'bg-success-soft text-success'
-                        }`}
-                      >
-                        {inv.used ? '已使用' : inv.revoked ? '已撤销' : '有效'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                      {new Date(inv.createdAt).toLocaleDateString('zh-CN')}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                    暂无邀请码
-                  </td>
-                </tr>
-              )}
-
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Tabs
+        tabs={tabs}
+        value={activeTab}
+        onValueChange={(id) => setActiveTab(id as AdminUsersTab)}
+        aria-label="用户与邀请"
+      />
 
       {/* Create Invite Modal */}
-      <Dialog
-        open={inviteModalOpen}
-        onClose={() => setInviteModalOpen(false)}
-        title="创建新邀请码"
-      >
+      <Dialog open={inviteModalOpen} onClose={() => setInviteModalOpen(false)} title="创建邀请码">
         <form
-          className="mt-4 space-y-4"
+          className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault()
             createInviteMutation.mutate()
           }}
         >
-          {actionError && (
-            <div id="invite-error" className="rounded border border-danger-soft bg-danger-soft/20 p-2 text-xs text-danger" role="alert">
-              {actionError}
+          {actionError ? (
+            // The 4px bar is `Alert`'s `danger` tone — a soft red is never a border colour.
+            <div id="invite-error">
+              <Alert tone="danger" role="alert" title="无法创建邀请码">
+                {actionError}
+              </Alert>
             </div>
-          )}
+          ) : null}
 
-          <div>
-            <label htmlFor="invite-email" className="mb-1 block text-xs font-medium text-foreground">
-              限定邮箱（可选，留空则任意人可用）
-            </label>
-            <input
-              id="invite-email"
+          <FormField
+            id="invite-email"
+            label="限定邮箱"
+            hint="可选。留空则任意邮箱均可使用该邀请码。"
+          >
+            <Input
               type="email"
               value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
+              onChange={(event) => setInviteEmail(event.target.value)}
               placeholder="user@example.com"
-              aria-invalid={!!actionError}
-              aria-describedby={actionError ? 'invite-error' : undefined}
-              className="w-full rounded-[var(--radius-control)] border border-border-control bg-canvas px-3 py-1.5 text-sm text-foreground outline-none"
+              invalid={Boolean(actionError)}
+              aria-describedby={
+                actionError ? 'invite-email-hint invite-error' : 'invite-email-hint'
+              }
             />
-          </div>
+          </FormField>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setInviteModalOpen(false)}
-              className="rounded-[var(--radius-control)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-subtle"
-            >
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setInviteModalOpen(false)}>
               取消
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={createInviteMutation.isPending}
-              className="flex items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-4 py-1.5 text-xs font-medium text-accent-contrast hover:bg-accent-hover disabled:opacity-50"
+              loading={createInviteMutation.isPending}
+              icon={<UserPlus aria-hidden="true" />}
             >
-              {createInviteMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              生成邀请码
-            </button>
+              创建邀请码
+            </Button>
           </div>
         </form>
       </Dialog>

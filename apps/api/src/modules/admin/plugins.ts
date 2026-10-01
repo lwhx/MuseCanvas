@@ -12,7 +12,9 @@ import type {
 } from '@musecanvas/contracts'
 import {
   PLUGIN_ARTIFACT_MAX_BYTES,
+  globalPluginRegistry,
   globalProviderRegistry,
+  pluginCredentialSpec,
   pluginObjectKey,
   scanPluginSource,
   validatePluginManifest,
@@ -164,6 +166,11 @@ export async function validatePluginPackage(request: PluginPackageRequest): Prom
   })
 }
 
+/** Provider accounts owned by shipped plugins; uploads may never claim them. */
+export function builtinCredentialProviders(): Set<string> {
+  return new Set(globalPluginRegistry.listManifests().map(manifest => pluginCredentialSpec(manifest).providerId))
+}
+
 export async function installPlugin(actor: Actor, request: PluginPackageRequest): Promise<NextResponse> {
   if (!pluginUploadEnabled()) return UPLOAD_DISABLED()
   const parsed = await readPluginPackage(request)
@@ -175,6 +182,13 @@ export async function installPlugin(actor: Actor, request: PluginPackageRequest)
   // first-write-wins, so the row would sit 'failed' forever. Fail fast instead.
   if (globalProviderRegistry.has(manifest.id, manifest.version)) {
     return fail('PLUGIN_ID_RESERVED', `${manifest.id}@${manifest.version} 是内置插件标识，请使用其他插件 id`)
+  }
+  // Credentials are shared per provider account, so an upload claiming a built-in
+  // provider (declared, or derived from an id like 'openai') would be handed that
+  // account's secrets. Uploaded plugins bring their own provider namespace.
+  const providerId = pluginCredentialSpec(manifest).providerId
+  if (builtinCredentialProviders().has(providerId)) {
+    return fail('PROVIDER_ID_RESERVED', `凭据供应商 ${providerId} 属于内置插件，请在 manifest.credential.providerId 中使用其他标识`)
   }
   // VERSION IMMUTABILITY: (plugin_id, plugin_version) is write-once, even after a
   // soft delete. Both the worker's registry Map and Node's ESM module cache key on

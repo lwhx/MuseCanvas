@@ -188,6 +188,19 @@ export const veoVideoManifest: MediaProviderManifest = {
     'oauth2.googleapis.com',
   ],
   credentialSchemas: ['json-v1', 'access-token-v1'],
+  credential: {
+    providerId: 'google',
+    schemaId: 'json-v1',
+    secret: {
+      format: 'json',
+      label: 'Google Service Account JSON',
+      placeholder: '{"type":"service_account","project_id":"...","client_email":"...","private_key":"..."}',
+      help: 'Google Cloud service-account JSON with Vertex AI (Veo) access.',
+    },
+    // The request host is derived from the configured location, so the base URL
+    // only has to stay inside the Vertex AI allowlist.
+    baseUrl: { default: 'https://us-central1-aiplatform.googleapis.com', policy: 'allowlisted' },
+  },
   models: [
     {
       id: VEO_STANDARD_MODEL,
@@ -351,6 +364,10 @@ function orList(values: string[]): string {
 function hasServiceAccountFields(extra: Record<string, unknown>): boolean {
   return typeof extra.client_email === 'string' || typeof extra.private_key === 'string'
 }
+/** Both halves present and non-blank: the only service account that can mint a token. */
+function hasCompleteServiceAccount(extra: Record<string, unknown>): boolean {
+  return Boolean(readString(extra.client_email)?.trim()) && typeof extra.private_key === 'string' && extra.private_key.trim().length > 0
+}
 const serviceAccountTokenCache = new Map<string, { token: string; expiresAtMs: number }>()
 const SERVICE_ACCOUNT_TOKEN_CACHE_LIMIT = 100
 
@@ -408,12 +425,12 @@ export class VeoVideoPlugin implements MediaProviderPlugin {
       readString(extra.accessToken) ??
       readString(config.accessToken) ??
       (credential.schema === 'access-token-v1' ? readString(credential.apiKey) : undefined)
-    if (!accessToken && !hasServiceAccountFields(extra)) {
+    if (!accessToken && !hasCompleteServiceAccount(extra)) {
       throw NormalizedProviderError.create(
         VEO_VIDEO_PLUGIN_ID,
         VEO_VIDEO_PLUGIN_VERSION,
         'INVALID_CREDENTIAL',
-        'Veo credential must provide a short-lived accessToken in credential.extra (or an access-token-v1 credential), or service-account fields',
+        'Veo credential must provide a short-lived accessToken in credential.extra (or an access-token-v1 credential), or a service account with client_email and private_key',
       )
     }
   }

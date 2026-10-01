@@ -24,9 +24,9 @@ interface AdminCredentialTableProps {
   credentials: ProviderCredential[]
   isLoading: boolean
   /**
-   * `media` rows are plugin-bound credentials and show their plugin identity;
-   * `language` rows are plugin-less (adapter + API key) credentials and show
-   * which models consume them.
+   * `media` rows were created from a plugin template and show that plugin and
+   * their provider account; `language` rows were created without one (provider +
+   * API key) and show which models consume them.
    */
   variant: 'media' | 'language'
   /** Model display names keyed by the credential id they are bound to. */
@@ -43,6 +43,7 @@ const TEST_STATUS_LABEL: Record<ProviderTestStatus, string> = {
   success: '测试通过',
   failed: '测试失败',
   not_tested: '未测试',
+  pending: '测试中',
 }
 
 const COLUMN_COUNT = 6
@@ -103,6 +104,10 @@ export function AdminCredentialTable({
       })
       if (res.success && res.data?.tested && res.data.status === 'success') {
         setTestResult({ id, success: true, msg: '连通性测试通过' })
+      } else if (res.success && res.data?.status === 'pending') {
+        // The worker is still probing; the row turns final on its own (the
+        // credential list polls while any test is pending).
+        setTestResult({ id, success: true, msg: '测试仍在进行，结果将显示在「最近测试」中' })
       } else {
         setTestResult({ id, success: false, msg: res.error?.message || '连通性测试未通过' })
       }
@@ -110,6 +115,8 @@ export function AdminCredentialTable({
       setTestResult({ id, success: false, msg: '测试请求失败' })
     } finally {
       setTestingId(null)
+      // The test stamps `lastTestStatus` on the row either way.
+      queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
     }
   }
 
@@ -133,10 +140,10 @@ export function AdminCredentialTable({
                   凭据名称
                 </th>
                 <th scope="col" className="px-4 py-3 text-sm font-medium">
-                  {variant === 'media' ? '绑定插件' : '适配协议'}
+                  {variant === 'media' ? '来源插件' : '供应商'}
                 </th>
                 <th scope="col" className="px-4 py-3 text-sm font-medium">
-                  {variant === 'media' ? '供应商 / 适配器' : '关联模型'}
+                  {variant === 'media' ? '供应商账号' : '关联模型'}
                 </th>
                 <th scope="col" className="px-4 py-3 text-sm font-medium">
                   API Key 状态
@@ -201,12 +208,11 @@ export function AdminCredentialTable({
                       {variant === 'media' ? (
                         <td className="px-4 py-3 font-mono text-xs text-foreground">{pluginKey || '-'}</td>
                       ) : (
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{c.adapter || '-'}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{c.providerId || c.adapter || '-'}</td>
                       )}
                       {variant === 'media' ? (
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                           <div>{c.providerId || '-'}</div>
-                          <div>{c.adapter || '-'}</div>
                         </td>
                       ) : (
                         <td className="px-4 py-3 text-muted-foreground">

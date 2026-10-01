@@ -4,9 +4,12 @@ import assert from 'node:assert/strict'
 // facade wraps, which keeps the "registered as media must not dispatch" assertion honest.
 import './plugins/index'
 import {
+  BUILTIN_LANGUAGE_PLUGIN_KEYS,
   LanguageModelHttpError,
   callLanguageModel,
   globalPluginRegistry,
+  isBuiltinLanguagePluginKey,
+  pluginCredentialSpec,
   type DecodedCredential,
   type LanguageCompletionResult,
   type LanguageExecutionContext,
@@ -206,5 +209,58 @@ test('the plugin branch keeps the allowlist pinned: a config.baseUrl host is nev
       assert.equal((error as LanguageModelHttpError).diagnostic.statusText, 'UNSAFE_URL')
       return true
     },
+  )
+})
+
+test('the native protocols are registered under the keys historical language rows carry', () => {
+  for (const key of BUILTIN_LANGUAGE_PLUGIN_KEYS) {
+    const [id, version] = key.split('@')
+    assert.equal(globalPluginRegistry.kindOf(id, version), 'language', key)
+  }
+  assert.equal(isBuiltinLanguagePluginKey('openai-language', '1.0.0'), true)
+  assert.equal(isBuiltinLanguagePluginKey('openai-language', null), false)
+  assert.equal(isBuiltinLanguagePluginKey('dispatch-happy-path', '1.0.0'), false)
+  assert.deepEqual(
+    BUILTIN_LANGUAGE_PLUGIN_KEYS.map(key => {
+      const [id, version] = key.split('@')
+      return pluginCredentialSpec(globalPluginRegistry.getLanguage(id, version).manifest).providerId
+    }),
+    ['openai', 'anthropic'],
+  )
+})
+
+test('a built-in language key keeps the native protocol path, byte for byte', async () => {
+  const bodies: string[] = []
+  const original = globalThis.fetch
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    bodies.push(String(init?.body))
+    return new Response(JSON.stringify({ id: 'built-in', choices: [{ message: { content: 'native' } }] }), { status: 200 })
+  }) as typeof globalThis.fetch
+  try {
+    const bare = await callLanguageModel(builtInInput)
+    const keyed = await callLanguageModel({ ...builtInInput, pluginId: 'openai-language', pluginVersion: '1.0.0' })
+    // The plugin interface reaches the same function, for callers that go through it.
+    const plugin = globalPluginRegistry.getLanguage('openai-language', '1.0.0')
+    const viaPlugin = await plugin.complete(
+      { protocol: 'openai_chat', vendorModelId: 'gpt-4o', system: 'sys', user: 'usr', maxOutputTokens: 64, timeoutMs: 1000 },
+      { baseUrl: 'https://api.openai.com', credential: { schema: 'legacy-api-key-v1', apiKey: 'sk-built-in' } },
+      globalPluginRegistry.createLanguageExecutionContext('openai-language', '1.0.0'),
+    )
+    assert.deepEqual([bare.text, keyed.text, viaPlugin.text], ['native', 'native', 'native'])
+    assert.equal(bodies.length, 3)
+    assert.equal(bodies[1], bodies[0])
+    assert.equal(bodies[2], bodies[0])
+  } finally {
+    globalThis.fetch = original
+  }
+  // A protocol the plugin does not serve is refused rather than silently remapped.
+  const anthropic = globalPluginRegistry.getLanguage('anthropic-language', '1.0.0')
+  await assert.rejects(
+    anthropic.complete(
+      { protocol: 'openai_chat', vendorModelId: 'x', system: 's', user: 'u', maxOutputTokens: 1, timeoutMs: 1000 },
+      { credential: { schema: 'legacy-api-key-v1', apiKey: 'k' } },
+      globalPluginRegistry.createLanguageExecutionContext('anthropic-language', '1.0.0'),
+    ),
+    /INVALID_CONFIG/,
   )
 })

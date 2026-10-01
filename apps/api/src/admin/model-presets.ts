@@ -60,7 +60,7 @@ export type LanguageModelPreset = {
 export type ModelPreset = ImageModelPreset | VideoModelPreset | LanguageModelPreset
 
 /**
- * Host-slug preset ids are pinned by `packages/database/src/migrate.ts`
+ * Host-slug preset ids are pinned by `packages/database/migrations/*.sql`
  * eligibility checks (`WHERE preset_id = 'openai-gpt-image-2' …`) and by
  * `presetMatchesPersistedModel`, which compares a stored `preset_id` against the
  * row's plugin identity. Renaming one is a data migration, not a refactor, so

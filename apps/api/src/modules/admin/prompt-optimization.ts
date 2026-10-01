@@ -2,8 +2,6 @@ import { db, transaction } from '../../../../../packages/database/src/index'
 import { type Actor } from '../../auth/security'
 import { fail, ok } from '../../shared/http'
 import { writeAudit } from '../../shared/audit'
-import { decryptApiKey } from '../../auth/security'
-import { callLanguageModel } from '../../../../../packages/providers/src/index'
 
 const optimizationSettingsDto = (row: any) => ({
   enabled: row.enabled,
@@ -85,43 +83,4 @@ export async function updatePromptOptimizationSettings(
     return r.rows[0]
   })
   return ok(optimizationSettingsDto(updated))
-}
-
-export async function testLanguageModel(id: string) {
-  const r = await db().query(
-    `SELECT m.*,pc.api_key_encrypted,COALESCE(pc.base_url,m.base_url) effective_base_url FROM model_configs m JOIN provider_credentials pc ON pc.id=m.provider_credential_id AND pc.deleted_at IS NULL WHERE m.id=$1 AND m.model_kind='language' AND m.deleted_at IS NULL AND pc.enabled=true`,
-    [id],
-  )
-  const model = r.rows[0]
-  if (!model?.api_key_encrypted)
-    return fail('PROMPT_MODEL_NOT_CONFIGURED', '语言模型或凭据未正确配置')
-  try {
-    const reasoningEffort =
-      ['gpt-5.4', 'gpt-5.5'].includes(model.vendor_model_id) ? 'none' : model.reasoning_effort || undefined
-    await callLanguageModel({
-      protocol: model.language_protocol,
-      vendorModelId: model.vendor_model_id,
-      baseUrl: model.effective_base_url,
-      apiKey: decryptApiKey(model.api_key_encrypted),
-      system: 'Return only the requested JSON.',
-      user: 'MuseCanvas language model connectivity test. Return {"ok":"yes"}.',
-      schemaName: 'connectivity_test',
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: { ok: { type: 'string', const: 'yes' } },
-        required: ['ok'],
-      },
-      maxOutputTokens: Math.min(1000, model.max_output_tokens),
-      reasoningEffort,
-      timeoutMs: 15000,
-    })
-    return ok({ tested: true, status: 'success' })
-  } catch (error) {
-    const code =
-      error instanceof Error && /^[A-Z_]+$/.test(error.message)
-        ? error.message
-        : 'PROMPT_OPTIMIZATION_TEMPORARY_ERROR'
-    return fail(code, '语言模型连通性测试失败', 502)
-  }
 }

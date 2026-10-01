@@ -6,8 +6,9 @@ import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { BuiltinProviderTemplate, ProviderCredentialInput } from '@/shared/types'
 import {
-  LEGACY_ADAPTER_OPTIONS,
+  CUSTOM_PROVIDER_OPTIONS,
   buildTemplateCredentialInput,
+  parseJsonSecret,
   parseServiceAccountJson,
 } from '../lib/provider-templates'
 import {
@@ -28,9 +29,9 @@ interface AdminProviderCredentialDialogProps {
   /** When set, the dialog is pinned to this plugin and hides both pickers. */
   lockedTemplate?: BuiltinProviderTemplate | null
   /**
-   * Which credential family the dialog creates. `media` offers plugin-backed
-   * credentials (plus legacy media adapters); `language` is the plugin-less
-   * adapter + API key shape that language models bind to.
+   * Which credential family the dialog creates. `media` offers template-validated
+   * credentials (plus custom media provider accounts); `language` is the
+   * provider + API key shape that language models bind to.
    */
   scope?: 'media' | 'language'
 }
@@ -51,12 +52,20 @@ function validationError(field: FieldKey, message: string): FieldValidationError
 }
 
 const MODE_OPTIONS: { value: Mode; label: string; hint: string }[] = [
-  { value: 'template', label: '内置插件', hint: '由供应商插件签发，可通过连通测试。' },
-  { value: 'legacy', label: '自定义凭据', hint: '不绑定插件身份，按适配协议 + API Key 使用。' },
+  { value: 'template', label: '内置插件', hint: '按插件声明的格式与端点校验，可通过连通测试。' },
+  { value: 'legacy', label: '自定义凭据', hint: '只选择供应商账号，可填写兼容端点。' },
 ]
 
-// Legacy (plugin-less) credentials remain the path for language models and
-// custom endpoints; the API rejects any other adapter without plugin identity.
+// Credentials belong to a provider account. A template names the plugin whose
+// declared contract validates the secret; custom credentials name only the account
+// (language models and compatible endpoints), and the API checks them against
+// every plugin of that account.
+const ENDPOINT_POLICY_LABEL: Record<BuiltinProviderTemplate['credential']['baseUrlPolicy'], string> = {
+  fixed: '仅官方端点',
+  allowlisted: '插件允许的域名',
+  'any-https': '任意 HTTPS 端点',
+}
+
 export function AdminProviderCredentialDialog({
   open,
   onClose,
@@ -70,17 +79,17 @@ export function AdminProviderCredentialDialog({
   const [displayName, setDisplayName] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [serviceAccountRaw, setServiceAccountRaw] = useState('')
-  const [adapter, setAdapter] = useState(LEGACY_ADAPTER_OPTIONS[scope][0].value)
+  const [customProvider, setCustomProvider] = useState(CUSTOM_PROVIDER_OPTIONS[scope][0].value)
   const [baseUrl, setBaseUrl] = useState('')
   const [actionError, setActionError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
-  const legacyAdapters = LEGACY_ADAPTER_OPTIONS[scope]
+  const customProviders = CUSTOM_PROVIDER_OPTIONS[scope]
   const template = scope === 'language'
     ? null
     : lockedTemplate ?? templates.find((t) => t.key === templateKey) ?? null
   const effectiveMode: Mode = scope === 'language' ? 'legacy' : (lockedTemplate ? 'template' : mode)
-  const useServiceAccount = template?.credential.kind === 'google_service_account'
+  const useJsonSecret = template?.credential.format === 'json'
 
   function clearFieldError(field: FieldKey) {
     setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
@@ -102,8 +111,12 @@ export function AdminProviderCredentialDialog({
       let body: ProviderCredentialInput
       if (effectiveMode === 'template') {
         if (!template) throw validationError('template', '请选择媒体插件。')
-        if (template.credential.kind === 'google_service_account') {
-          const parsed = parseServiceAccountJson(serviceAccountRaw)
+        if (template.credential.format === 'json') {
+          // Google's service-account fields are known here; any other JSON
+          // credential is checked by its plugin's declared contract on save.
+          const parsed = template.providerId === 'google'
+            ? parseServiceAccountJson(serviceAccountRaw)
+            : parseJsonSecret(serviceAccountRaw)
           if (!parsed.ok) throw validationError('serviceAccount', parsed.error)
           body = buildTemplateCredentialInput(template, parsed.value, displayName)
         } else {
@@ -113,7 +126,7 @@ export function AdminProviderCredentialDialog({
       } else {
         if (!displayName.trim()) throw validationError('displayName', '请输入凭据显示名称。')
         if (!apiKey.trim()) throw validationError('apiKey', '请输入 API Key。')
-        body = { displayName: displayName.trim(), adapter, baseUrl: baseUrl.trim() || undefined, apiKey: apiKey.trim(), enabled: true }
+        body = { displayName: displayName.trim(), providerId: customProvider, baseUrl: baseUrl.trim() || undefined, secret: apiKey.trim(), enabled: true }
       }
       const res = await api(API_ENDPOINTS.admin.providerCredentials, { method: 'POST', body })
       if (!res.success) throw new Error(res.error?.message || '创建凭据失败')
@@ -137,7 +150,7 @@ export function AdminProviderCredentialDialog({
     },
   })
 
-  const credentialFieldLabel = useServiceAccount
+  const credentialFieldLabel = useJsonSecret
     ? template?.credential.label
     : (template?.credential.label ?? 'API Key')
 
@@ -213,7 +226,7 @@ export function AdminProviderCredentialDialog({
               label="媒体插件"
               required
               error={fieldErrors.template}
-              hint="凭据将绑定所选插件的身份，仅该插件的模型可以使用。"
+              hint="凭据按所选插件声明的格式与端点校验；同一供应商账号下的其它插件也可以使用。"
             >
               <Select
                 value={templateKey}
@@ -241,6 +254,7 @@ export function AdminProviderCredentialDialog({
                 供应商 {template.providerId} · 凭据 {template.credential.schemaId}@{template.credential.schemaVersion}
               </div>
               <div className="break-all font-mono">{template.baseUrl}</div>
+              <div>端点策略：{ENDPOINT_POLICY_LABEL[template.credential.baseUrlPolicy]}</div>
             </div>
           )}
 
@@ -248,12 +262,12 @@ export function AdminProviderCredentialDialog({
             <div className="rounded-control bg-tonal p-3 text-xs text-muted-foreground">
               {scope === 'language' ? (
                 <>
-                  语言模型不使用供应商插件，凭据按{' '}
-                  <span className="font-mono text-foreground">适配协议 + API Key</span> 与语言模型绑定。
+                  语言模型凭据由{' '}
+                  <span className="font-mono text-foreground">供应商 + API Key</span> 组成，可填写兼容端点。
                 </>
               ) : (
                 <>
-                  自定义凭据不绑定插件身份，因此无法通过媒体凭据的连通测试；此类凭据列在
+                  自定义凭据不经插件模板校验，关联模型后可借该模型的插件做连通测试；此类凭据列在
                   <span className="font-mono text-foreground">语言模型</span>
                   页的凭据列表中。
                 </>
@@ -282,9 +296,9 @@ export function AdminProviderCredentialDialog({
           )}
 
           {effectiveMode === 'legacy' && (
-            <FormField label="适配协议" hint="决定请求与响应的解析方式，需与服务端接口一致。">
-              <Select value={adapter} onChange={(e) => setAdapter(e.target.value)}>
-                {legacyAdapters.map((a) => (
+            <FormField label="供应商" hint="凭据所属的供应商账号，决定哪些插件的模型可以使用它。">
+              <Select value={customProvider} onChange={(e) => setCustomProvider(e.target.value)}>
+                {customProviders.map((a) => (
                   <option key={a.value} value={a.value}>
                     {a.label}
                   </option>
@@ -296,7 +310,7 @@ export function AdminProviderCredentialDialog({
           {effectiveMode === 'legacy' && (
             <FormField
               label="Base URL（可选）"
-              hint="留空时使用适配协议的默认端点；填写时请写到版本路径，例如 https://api.example.com/v1。"
+              hint="留空时使用供应商的默认端点；填写时请写到版本路径，例如 https://api.example.com/v1。"
             >
               <Input
                 type="text"
@@ -346,12 +360,12 @@ export function AdminProviderCredentialDialog({
                 spellCheck={false}
               />
             </FormField>
-          ) : useServiceAccount ? (
+          ) : useJsonSecret ? (
             <FormField
-              label={credentialFieldLabel ?? '服务账号 JSON'}
+              label={credentialFieldLabel ?? '凭据 JSON'}
               required
               error={fieldErrors.serviceAccount}
-              hint={template?.credential.helpText ?? '粘贴 Google 服务账号密钥文件内容，仅服务端解密使用。'}
+              hint={template?.credential.helpText ?? '粘贴凭据 JSON，仅服务端解密使用。'}
               keepHintOnError
             >
               <Textarea

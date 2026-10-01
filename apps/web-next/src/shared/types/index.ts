@@ -379,15 +379,15 @@ export interface AdminModel extends ModelConfig {
   defaultsJson?: string
 }
 
-export type ProviderTestStatus = 'success' | 'failed' | 'not_tested'
+/** `pending` while a worker has not yet settled an open test request. */
+export type ProviderTestStatus = 'success' | 'failed' | 'not_tested' | 'pending'
 
 export interface ProviderCredentialConfiguredFields {
+  /** The template plugin the credential was created from (a hint, not a binding). */
   pluginId?: string
   pluginVersion?: string
-  baseUrl?: string | null
   hasApiKey?: boolean
   apiKeyFingerprint?: string
-  legacyFormat?: boolean
   [key: string]: unknown
 }
 
@@ -414,23 +414,16 @@ export interface ProviderCredential {
 
 export interface ProviderCredentialInput {
   displayName?: string
-  adapter?: ModelAdapter
+  /** Provider account the credential belongs to (e.g. 'openai', 'volcengine', 'google'). */
   providerId?: string
+  /** Template plugin whose declared contract validates the secret. */
   pluginId?: string
   pluginVersion?: string
   schemaId?: string
   schemaVersion?: number | string
   baseUrl?: string
-  /** Real credential payload (write-only): API key string or service-account object. */
-  credential?: string | Record<string, unknown>
-  apiKey?: string
-  /** Google service-account JSON (write-only) for video providers. */
-  serviceAccountJson?: string
-  /** Volcengine AK/SK bundle (write-only) for Seedance/volcengine providers. */
-  accessKeyId?: string
-  secretAccessKey?: string
-  /** Generic credential JSON payload (write-only) for plugin providers. */
-  credentialJson?: string
+  /** Write-only secret: a bare key, or a JSON object for `json` credentials. */
+  secret?: string | Record<string, unknown>
   enabled?: boolean
 }
 
@@ -440,10 +433,14 @@ export type BuiltinProviderTemplateCredentialKind = 'api_key' | 'google_service_
 export interface BuiltinProviderTemplateCredential {
   schemaId: string
   schemaVersion: number
+  /** How the secret is entered: a bare key (`text`) or a pasted JSON object (`json`). */
+  format: 'text' | 'json'
+  /** @deprecated Derived from `format`; read `format`. */
   kind: BuiltinProviderTemplateCredentialKind
   label: string
   placeholder?: string
   helpText?: string
+  baseUrlPolicy: 'fixed' | 'allowlisted' | 'any-https'
 }
 
 export interface BuiltinProviderTemplateModel {

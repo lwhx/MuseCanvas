@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { providerCredentialMatchesPluginTarget } from './handlers'
 import {
   hasForbiddenManualModelFields,
   modelOverrideError,
@@ -26,13 +25,6 @@ test('preset path rejects fields that may only come from a preset', () => {
   assert.equal(hasForbiddenManualModelFields({ pluginId: 'plugin' }), true)
   assert.equal(hasForbiddenManualModelFields({ concurrencyLimit: 3, enabled: true }), false)
   assert.equal(hasForbiddenManualModelFields({ displayName: undefined }), false)
-})
-
-test('credential identity must match the selected plugin and version', () => {
-  const target = { providerId: 'provider-a', pluginId: 'plugin-a', pluginVersion: '1.0.0' }
-  assert.equal(providerCredentialMatchesPluginTarget({ provider_id: 'different', configured_fields: { pluginId: 'plugin-a', pluginVersion: '1.0.0' } }, target), true)
-  assert.equal(providerCredentialMatchesPluginTarget({ provider_id: 'provider-a', configured_fields: { pluginId: 'plugin-b', pluginVersion: '1.0.0' } }, target), false)
-  assert.equal(providerCredentialMatchesPluginTarget({ provider_id: 'provider-a', configured_fields: {} }, target), true)
 })
 
 test('preset revision snapshot failure returns the pre-revision row', async () => {

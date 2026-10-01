@@ -212,6 +212,18 @@ function buildManifest(version: string, active: boolean): MediaProviderManifest 
       : 'ByteDance Seedream image generation models via Volcengine Ark API',
     allowedHosts: ['ark.cn-beijing.volces.com', '*.volces.com'],
     credentialSchemas: ['legacy-api-key-v1', 'json-v1'],
+    credential: {
+      providerId: 'volcengine',
+      schemaId: 'legacy-api-key-v1',
+      secret: {
+        format: 'text',
+        label: 'Volcengine Ark API Key',
+        placeholder: 'Ark API key',
+        help: 'Volcengine Ark API key with Seedream model access.',
+      },
+      // 1.1.0 is pinned to the official endpoint; 1.0.0 keeps serving compatible ones.
+      baseUrl: { default: 'https://ark.cn-beijing.volces.com', policy: active ? 'fixed' : 'any-https' },
+    },
     models: [
       {
         id: 'doubao-seedream-4-0-250828',

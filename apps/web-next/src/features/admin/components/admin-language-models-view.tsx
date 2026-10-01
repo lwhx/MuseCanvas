@@ -90,6 +90,8 @@ export function AdminLanguageModelsView() {
       const res = await api<ProviderCredential[]>(API_ENDPOINTS.admin.providerCredentials)
       return res.data || []
     },
+    // Connectivity tests settle in the worker; poll only while one is open.
+    refetchInterval: (query) => (query.state.data?.some((c) => c.lastTestStatus === 'pending') ? 2000 : false),
   })
 
   // This page is language-model only: rows and presets are scoped by kind, and
@@ -350,8 +352,8 @@ export function AdminLanguageModelsView() {
               语言模型凭据
             </h2>
             <p className="max-w-reading text-sm text-muted-foreground">
-              语言模型绑定无插件身份的自定义凭据（适配协议 openai / anthropic + API Key）。图像与视频凭据由
-              供应商插件签发，请在「媒体模型」页配置；历史遗留的自定义媒体凭据同样列在此处。
+              语言模型使用供应商账号凭据（openai / anthropic + API Key，可填写兼容端点）。图像与视频凭据从插件模板创建，
+              请在「媒体模型」页配置；未经插件模板创建的自定义媒体凭据同样列在此处。
             </p>
           </div>
           <Button variant="secondary" onClick={() => setCredentialDialogOpen(true)} icon={<Plus aria-hidden="true" />}>
@@ -421,7 +423,7 @@ export function AdminLanguageModelsView() {
               hint={
                 selectedPreset ? (
                   <>
-                    按适配协议 <span className="font-mono text-foreground">{selectedPreset.adapter || '-'}</span> 匹配凭据
+                    按供应商 <span className="font-mono text-foreground">{selectedPreset.adapter || '-'}</span> 匹配凭据
                     {matchingCredentials.length === 0 ? '，当前无可用凭据，请在下方「语言模型凭据」区创建凭据' : ''}
                   </>
                 ) : undefined

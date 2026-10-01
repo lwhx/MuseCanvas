@@ -1,6 +1,8 @@
 import { db } from '../../../../../packages/database/src/index'
 import {
-  globalProviderRegistry,
+  globalPluginRegistry,
+  hostMatchesAllowlist,
+  pluginCredentialSpec,
   validatePluginManifest,
   type AnyProviderManifest,
 } from '../../../../../packages/providers/src/index'
@@ -25,11 +27,11 @@ const pluginKeyOf = (manifest: AnyProviderManifest): string => `${manifest.id}@$
  * worker's sandboxed import path, so for an installed plugin the row's whitelisted
  * manifest copy is the complete truth here: capabilities, hosts and models only.
  *
- * `model_configs.plugin_id` is NOT evidence of a plugin existing: the pre-existing
- * migration backfills it for every row (`openai-language`, `<adapter>-image`, …)
- * with ids that are registered nowhere. Every "is this plugin usable" question must
- * therefore go through this catalog — a built-in registry key or an
- * `status='active'` `provider_plugins` row — and never through the column.
+ * `model_configs.plugin_id` alone is not evidence of a usable plugin: an installed
+ * row may since have been disabled, and migration 0012's backfill still left a few
+ * ids that no plugin claims (`<adapter>-video` for a non-Seedance adapter, …).
+ * Every "is this plugin usable" question therefore goes through this catalog — a
+ * built-in registry key or a `status='active'` `provider_plugins` row.
  */
 export async function listCatalogManifests(): Promise<CatalogPlugin[]> {
   const builtin = builtinCatalogPlugins()
@@ -55,10 +57,9 @@ export async function listInstalledCatalogPlugins(): Promise<CatalogPlugin[]> {
 }
 
 export async function resolveCatalogPlugin(pluginId: string, pluginVersion: string): Promise<CatalogPlugin | null> {
-  // Built-ins resolve synchronously so the common path stays DB-free.
-  if (globalProviderRegistry.has(pluginId, pluginVersion)) {
-    return { source: 'builtin', manifest: globalProviderRegistry.get(pluginId, pluginVersion).manifest }
-  }
+  // Built-ins (media and language) resolve synchronously so the common path stays DB-free.
+  const builtin = builtinCatalogPlugin(pluginId, pluginVersion)
+  if (builtin) return builtin
   let row: Record<string, unknown> | undefined
   try {
     const r = await db().query(
@@ -93,24 +94,28 @@ function asCatalogManifest(value: unknown): AnyProviderManifest | null {
 }
 
 function builtinCatalogPlugins(): CatalogPlugin[] {
-  return globalProviderRegistry.listManifests().map(manifest => ({ source: 'builtin' as const, manifest }))
+  return globalPluginRegistry.listManifests().map(manifest => ({ source: 'builtin' as const, manifest }))
 }
 
-/** Exact (non-wildcard) manifest host is the only endpoint hint the host has without loading code. */
-export function installedPluginBaseUrl(allowedHosts: string[]): string {
-  const host = allowedHosts.find(entry => !!entry && !entry.includes('*'))
-  return host ? `https://${host}` : ''
+function builtinCatalogPlugin(pluginId: string, pluginVersion: string): CatalogPlugin | null {
+  switch (globalPluginRegistry.kindOf(pluginId, pluginVersion)) {
+    case 'media':
+      return { source: 'builtin', manifest: globalPluginRegistry.getMedia(pluginId, pluginVersion).manifest }
+    case 'language':
+      return { source: 'builtin', manifest: globalPluginRegistry.getLanguage(pluginId, pluginVersion).manifest }
+    default:
+      return null
+  }
 }
 
-/** Egress policy for an installed plugin: exact host or `*.suffix`, mirroring the scanner's grammar. */
+/** The plugin's declared (or derived) default endpoint, or '' when it names none. */
+export function installedPluginBaseUrl(manifest: AnyProviderManifest): string {
+  return pluginCredentialSpec(manifest).baseUrl.default ?? ''
+}
+
+/** Egress policy for a plugin, in exactly the grammar SafeHttpClient enforces. */
 export function manifestAllowsHost(manifest: AnyProviderManifest, host: string): boolean {
-  const target = host.toLowerCase()
-  return (manifest.allowedHosts || []).some(entry => {
-    const pattern = entry.trim().toLowerCase()
-    if (!pattern) return false
-    if (pattern.startsWith('*.')) return target === pattern.slice(2) || target.endsWith(`.${pattern.slice(2)}`)
-    return target === pattern
-  })
+  return hostMatchesAllowlist(host, manifest.allowedHosts || [])
 }
 
 /**
@@ -128,7 +133,7 @@ export function presetsForCatalogPlugins(entries: CatalogPlugin[]): ModelPreset[
   for (const entry of entries) {
     const manifest = entry.manifest
     if (manifest.kind !== 'media') continue
-    const baseUrl = installedPluginBaseUrl(manifest.allowedHosts || [])
+    const baseUrl = installedPluginBaseUrl(manifest)
     for (const model of manifest.models || []) {
       // The per-model modality wins; the manifest list is only the inherited default.
       const modality = model.modalities?.[0] || manifest.modalities[0]
@@ -137,7 +142,7 @@ export function presetsForCatalogPlugins(entries: CatalogPlugin[]): ModelPreset[
         modelKind: modality,
         id: `${INSTALLED_PRESET_PREFIX}${manifest.id}@${manifest.version}:${model.id}`,
         displayName: `${manifest.displayName} · ${model.name || model.id}`,
-        providerId: manifest.id,
+        providerId: pluginCredentialSpec(manifest).providerId,
         pluginId: manifest.id,
         pluginVersion: manifest.version,
         vendorModelId: model.id,

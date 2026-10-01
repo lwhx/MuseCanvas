@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -7,7 +7,7 @@ import '../../packages/providers/src/plugins/index'
 import { globalProviderRegistry } from '../../packages/providers/src/core/registry'
 
 /**
- * The migration in `packages/database/src/migrate.ts` (section 10b) has to embed
+ * The migration `packages/database/migrations/0022_plugin_declared_capabilities.sql` (section 10b) has to embed
  * each plugin's descriptor JSON as a SQL literal, because SQL cannot import
  * TypeScript. That is the one remaining copy in this architecture, and an
  * unpinned copy rots silently: the API would keep serving a contract the plugins
@@ -18,10 +18,12 @@ import { globalProviderRegistry } from '../../packages/providers/src/core/regist
  * plugin's capabilities without regenerating the migration fails here.
  */
 
-const MIGRATION = readFileSync(
-  fileURLToPath(new URL('../../packages/database/src/migrate.ts', import.meta.url)),
-  'utf8',
-)
+const MIGRATIONS_DIR = fileURLToPath(new URL('../../packages/database/migrations/', import.meta.url))
+const MIGRATION = readdirSync(MIGRATIONS_DIR)
+  .filter(name => /^\d{4}_.+\.sql$/.test(name))
+  .sort()
+  .map(name => readFileSync(`${MIGRATIONS_DIR}${name}`, 'utf8'))
+  .join('\n')
 
 function section(): string {
   const start = MIGRATION.indexOf('10b. Plugin-declared')

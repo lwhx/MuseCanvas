@@ -7,10 +7,7 @@ import {
   DECRYPTION_FAILED,
   LEGACY_KEY_ID,
   UNSUPPORTED_KEY_ID,
-  decryptApiKey,
   decryptForPurpose,
-  decryptProviderCredential,
-  encryptApiKey,
   encryptForPurpose,
   encryptProviderCredential,
   fingerprintApiKey,
@@ -162,6 +159,6 @@ export function shouldUseSecureCookie(publicOrigin?: string): boolean {
   return (publicOrigin || '').startsWith('https://')
 }
 
-// Source-compatible re-exports. decryptApiKey/decryptProviderCredential accept
-// an optional stored key id; omitting it dual-reads current then legacy.
-export { encryptApiKey, decryptApiKey, fingerprintApiKey, encryptProviderCredential, decryptProviderCredential }
+// Provider-credential write helpers. Reads never come through here: every stored
+// secret is opened by `decryptStoredCredential` / `openStoredCredential`.
+export { fingerprintApiKey, encryptProviderCredential }

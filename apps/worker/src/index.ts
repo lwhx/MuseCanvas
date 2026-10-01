@@ -4,7 +4,8 @@ import { consume } from './queue'
 import { processJob } from './jobs'
 import { maintenance } from './maintenance'
 import { PLUGIN_BOOT_REFRESH_BUDGET_MS, refreshPlugins } from './plugins/loader'
-import { assertBuiltinMediaPluginsAvailable } from './plugins/availability'
+import { assertBuiltinPluginsAvailable } from './plugins/availability'
+import { runCredentialTests } from './credentials/probe'
 
 async function main() {
   // Imports above stay side-effect free (no S3/DB connects at module load),
@@ -15,8 +16,8 @@ async function main() {
   assertBootstrapConfig()
   await redis.connect()
   // Every job path resolves through the availability gate, so verify here — not by
-  // assumption — that the built-in media keys it short-circuits really resolve.
-  assertBuiltinMediaPluginsAvailable()
+  // assumption — that the built-in keys (media and language) it short-circuits really resolve.
+  assertBuiltinPluginsAvailable()
   // The plugin catalog refresh is never allowed to gate boot: it swallows its own
   // errors and runs under a deadline, because a worker without S3 configured (or
   // with one wedged artifact) must still serve the built-in plugins. Installed
@@ -44,6 +45,16 @@ async function main() {
   }
   await runMaintenance()
   setInterval(runMaintenance, 5000)
+  // Credential tests have an admin waiting on them, so they get their own short
+  // cadence instead of queueing behind maintenance or a long generation job.
+  let testing = false
+  setInterval(async () => {
+    if (testing) return
+    testing = true
+    try { await runCredentialTests() }
+    catch (error) { console.error('credential tests failed', { code: error instanceof Error ? error.name : 'ERROR' }) }
+    finally { testing = false }
+  }, 2000)
   await consume(processJob)
 }
 main().catch(error => { console.error('worker fatal', { code: error instanceof Error ? error.name : 'ERROR' }); process.exit(1) })

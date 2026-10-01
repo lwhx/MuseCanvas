@@ -1,5 +1,5 @@
 import type { BuiltinProviderTemplate } from '@musecanvas/contracts'
-import { globalProviderRegistry } from '@musecanvas/providers'
+import { globalProviderRegistry, pluginCredentialSpec } from '@musecanvas/providers'
 import {
   installedPluginBaseUrl,
   presetsForCatalogPlugins,
@@ -17,219 +17,100 @@ function isPluginPreset(preset: ModelPreset, pluginId: string, pluginVersion: st
   return 'pluginId' in preset && preset.pluginId === pluginId && 'pluginVersion' in preset && preset.pluginVersion === pluginVersion
 }
 
-type BuiltinCatalogSpec = {
-  key: string
-  pluginId: string
-  pluginVersion: string
-  providerId: string
-  adapter: string
-  displayName: string
-  modality: 'image' | 'video'
-  baseUrl: string
-  credential: BuiltinProviderTemplate['credential']
-}
-
-// The four first-class built-in provider templates. Plugin keys, models, and
-// preset membership resolve from the live registry/manifests below; only the
-// display/credential metadata lives here.
-const BUILTIN_CATALOG_SPECS: BuiltinCatalogSpec[] = [
-  {
-    key: 'openai-image',
-    pluginId: 'openai-image',
-    pluginVersion: '1.1.0',
-    providerId: 'openai',
-    adapter: 'openai',
-    displayName: 'OpenAI Image',
-    modality: 'image',
-    baseUrl: 'https://api.openai.com',
-    credential: {
-      schemaId: 'legacy-api-key-v1',
-      schemaVersion: 1,
-      kind: 'api_key',
-      label: 'OpenAI API Key',
-      placeholder: 'sk-...',
-      helpText: 'Official OpenAI API key with image generation access.',
-    },
-  },
-  {
-    key: 'seedream-image',
-    pluginId: 'seedream-image',
-    pluginVersion: '1.1.0',
-    providerId: 'volcengine',
-    adapter: 'seedream',
-    displayName: 'Seedream Image',
-    modality: 'image',
-    baseUrl: 'https://ark.cn-beijing.volces.com',
-    credential: {
-      schemaId: 'legacy-api-key-v1',
-      schemaVersion: 1,
-      kind: 'api_key',
-      label: 'Volcengine Ark API Key',
-      placeholder: 'Ark API key',
-      helpText: 'Volcengine Ark API key with Seedream model access.',
-    },
-  },
-  {
-    key: 'seedance-video',
-    pluginId: 'seedance-video',
-    pluginVersion: '1.0.0',
-    providerId: 'volcengine',
-    adapter: 'seedream',
-    displayName: 'Seedance Video',
-    modality: 'video',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    credential: {
-      schemaId: 'legacy-api-key-v1',
-      schemaVersion: 1,
-      kind: 'api_key',
-      label: 'Volcengine Ark API Key',
-      placeholder: 'Ark API key',
-      helpText: 'Volcengine Ark API key with Seedance model access.',
-    },
-  },
-  {
-    key: 'veo-video',
-    pluginId: 'veo-video',
-    pluginVersion: '1.0.0',
-    providerId: 'google',
-    adapter: 'veo',
-    displayName: 'Veo Video',
-    modality: 'video',
-    baseUrl: 'https://us-central1-aiplatform.googleapis.com',
-    credential: {
-      schemaId: 'json-v1',
-      schemaVersion: 1,
-      kind: 'google_service_account',
-      label: 'Google Service Account JSON',
-      placeholder: '{"type":"service_account","project_id":"...","client_email":"...","private_key":"..."}',
-      helpText: 'Google Cloud service-account JSON with Vertex AI (Veo) access.',
-    },
-  },
+/**
+ * The built-in plugins offered as templates, and the only things the manifest does
+ * not say about them: a short catalog name and the deprecated `adapter` string.
+ * Provider account, credential format, endpoint and endpoint policy all come from
+ * the plugin's own `manifest.credential`, exactly as for an uploaded plugin.
+ */
+const BUILTIN_TEMPLATES: { key: string; pluginId: string; pluginVersion: string; displayName: string; adapter: string }[] = [
+  { key: 'openai-image', pluginId: 'openai-image', pluginVersion: '1.1.0', displayName: 'OpenAI Image', adapter: 'openai' },
+  { key: 'seedream-image', pluginId: 'seedream-image', pluginVersion: '1.1.0', displayName: 'Seedream Image', adapter: 'seedream' },
+  { key: 'seedance-video', pluginId: 'seedance-video', pluginVersion: '1.0.0', displayName: 'Seedance Video', adapter: 'seedream' },
+  { key: 'veo-video', pluginId: 'veo-video', pluginVersion: '1.0.0', displayName: 'Veo Video', adapter: 'veo' },
 ]
 
-// Registry-backed catalog of exactly the four current built-ins. Models come
-// from the exact plugin manifests; presetIds come from presets carrying the
-// exact plugin identity. Throws loudly when a listed preset references a
-// vendor model absent from its manifest so stale presets fail fast instead
-// of serving unresolvable templates.
-//
-// `installed` (active provider_plugins media manifests, resolved by the caller) is
-// appended as extra templates; omitting it keeps the built-in listing unchanged.
-export function buildBuiltinProviderTemplates(installed: CatalogPlugin[] = []): BuiltinProviderTemplate[] {
-  return [...BUILTIN_CATALOG_SPECS.map(builtinTemplateForSpec), ...installedProviderTemplates(installed)]
-}
-
-function builtinTemplateForSpec(spec: BuiltinCatalogSpec): BuiltinProviderTemplate {
-  const plugin = globalProviderRegistry.get(spec.pluginId, spec.pluginVersion)
-  const models = (plugin.manifest.models ?? []).map((model) => ({
-    id: model.id,
-    ...(model.name ? { name: model.name } : {}),
-  }))
-  const modelIds = new Set(models.map((model) => model.id))
-  const presetIds = modelPresets
-    .filter((preset) => isPluginPreset(preset, spec.pluginId, spec.pluginVersion))
-    .map((preset) => {
-      if (!modelIds.has(preset.vendorModelId)) {
-        throw new Error(
-          `Builtin provider template '${spec.key}' preset '${preset.id}' ` +
-            `vendorModelId '${preset.vendorModelId}' is absent from plugin ` +
-            `${spec.pluginId}@${spec.pluginVersion} manifest`,
-        )
-      }
-      return preset.id
-    })
+/**
+ * One template per plugin, built the same way for both sources. Built-ins take
+ * their preset membership from the shipped presets and fail loudly when a preset
+ * names a vendor model the manifest no longer has; uploads take theirs from the
+ * presets synthesized off their own manifest.
+ */
+function templateFor(
+  entry: CatalogPlugin,
+  builtin?: { key: string; displayName: string; adapter: string },
+): BuiltinProviderTemplate | null {
+  const manifest = entry.manifest
+  if (manifest.kind !== 'media') return null
+  const spec = pluginCredentialSpec(manifest)
+  const models = (manifest.models ?? []).map(model => ({ id: model.id, ...(model.name ? { name: model.name } : {}) }))
+  const modelIds = new Set(models.map(model => model.id))
+  const presetIds = builtin
+    ? modelPresets
+      .filter(preset => isPluginPreset(preset, manifest.id, manifest.version))
+      .map(preset => {
+        if (!modelIds.has(preset.vendorModelId)) {
+          throw new Error(
+            `Builtin provider template '${builtin.key}' preset '${preset.id}' ` +
+              `vendorModelId '${preset.vendorModelId}' is absent from plugin ` +
+              `${manifest.id}@${manifest.version} manifest`,
+          )
+        }
+        return preset.id
+      })
+    : presetsForCatalogPlugins([entry]).map(preset => preset.id)
   return {
-    key: spec.key,
-    pluginId: spec.pluginId,
-    pluginVersion: spec.pluginVersion,
+    key: builtin?.key ?? `installed:${manifest.id}@${manifest.version}`,
+    pluginId: manifest.id,
+    pluginVersion: manifest.version,
     providerId: spec.providerId,
-    adapter: spec.adapter,
-    displayName: spec.displayName,
-    ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
-    modality: spec.modality,
-    baseUrl: spec.baseUrl,
-    credential: spec.credential,
+    // No legacy adapter exists for an uploaded plugin; its id keeps the deprecated
+    // field populated without ever colliding with openai/seedream/anthropic.
+    adapter: builtin?.adapter ?? manifest.id,
+    displayName: builtin?.displayName ?? manifest.displayName,
+    ...(manifest.description ? { description: manifest.description } : {}),
+    modality: manifest.modalities[0],
+    baseUrl: installedPluginBaseUrl(manifest),
+    credential: {
+      schemaId: spec.schemaId,
+      schemaVersion: 1,
+      format: spec.secret.format,
+      kind: spec.secret.format === 'json' ? 'google_service_account' : 'api_key',
+      label: spec.secret.label,
+      ...(spec.secret.placeholder ? { placeholder: spec.secret.placeholder } : {}),
+      ...(spec.secret.help ? { helpText: spec.secret.help } : {}),
+      baseUrlPolicy: spec.baseUrl.policy,
+    },
     presetIds,
     models,
+    ...(entry.source === 'installed' ? { source: 'installed' as const } : {}),
   }
 }
 
-// One credential template per active installed media plugin, so an admin can create a
-// credential bound to pluginId@pluginVersion. The API never loads the artifact, so
-// everything here comes from the row's whitelisted manifest: the first exact
-// allowedHost is the default endpoint, and the declared credential schema only selects
-// which input the admin renders — reusing the two kinds the built-in catalog has.
-function installedProviderTemplates(installed: CatalogPlugin[]): BuiltinProviderTemplate[] {
-  const presets = presetsForCatalogPlugins(installed)
-  const templates: BuiltinProviderTemplate[] = []
-  for (const entry of installed) {
-    const manifest = entry.manifest
-    if (manifest.kind !== 'media') continue
-    const schemaId = (manifest.credentialSchemas || [])[0] || 'legacy-api-key-v1'
-    const kind: BuiltinProviderTemplate['credential']['kind'] = schemaId === 'legacy-api-key-v1' ? 'api_key' : 'google_service_account'
-    templates.push({
-      key: `installed:${manifest.id}@${manifest.version}`,
-      pluginId: manifest.id,
-      pluginVersion: manifest.version,
-      providerId: manifest.id,
-      // No legacy adapter exists for an uploaded plugin; the plugin id keeps the field
-      // populated while never colliding with openai/seedream/anthropic.
-      adapter: manifest.id,
-      displayName: manifest.displayName,
-      ...(manifest.description ? { description: manifest.description } : {}),
-      modality: manifest.modalities[0],
-      baseUrl: installedPluginBaseUrl(manifest.allowedHosts || []),
-      credential: {
-        schemaId,
-        schemaVersion: 1,
-        kind,
-        label: kind === 'api_key' ? `${manifest.displayName} API Key` : `${manifest.displayName} 凭据 JSON`,
-        placeholder: kind === 'api_key' ? 'API key' : '{"...":"..."}',
-        helpText: `${manifest.id}@${manifest.version} 声明的凭据格式（${schemaId}）。`,
-      },
-      presetIds: presets
-        .filter(preset => 'pluginId' in preset && preset.pluginId === manifest.id && preset.pluginVersion === manifest.version)
-        .map(preset => preset.id),
-      models: (manifest.models ?? []).map(model => ({
-        id: model.id,
-        ...(model.name ? { name: model.name } : {}),
-      })),
-      source: 'installed',
-    })
-  }
-  return templates
+function builtinTemplate(entry: (typeof BUILTIN_TEMPLATES)[number]): BuiltinProviderTemplate {
+  const manifest = globalProviderRegistry.get(entry.pluginId, entry.pluginVersion).manifest
+  const template = templateFor({ source: 'builtin', manifest }, entry)
+  if (!template) throw new Error(`Builtin provider template '${entry.key}' is not a media plugin`)
+  return template
 }
 
-// Catalog lookup for credential enforcement: returns the built-in template
-// for an explicit plugin identity, or null for custom/legacy identities.
+/**
+ * The built-in templates, then one per active installed media plugin (resolved by
+ * the caller from the catalog); omitting `installed` keeps the built-in listing.
+ */
+export function buildBuiltinProviderTemplates(installed: CatalogPlugin[] = []): BuiltinProviderTemplate[] {
+  const uploaded = installed
+    .filter(entry => entry.source === 'installed')
+    .map(entry => templateFor(entry))
+    .filter((template): template is BuiltinProviderTemplate => template !== null)
+  return [...BUILTIN_TEMPLATES.map(builtinTemplate), ...uploaded]
+}
+
+/** The built-in template for an exact plugin identity, or null for any other key. */
 export function builtinProviderTemplateForPlugin(
   pluginId: string,
   pluginVersion: string,
 ): BuiltinProviderTemplate | null {
-  const spec = BUILTIN_CATALOG_SPECS.find(
-    (entry) => entry.pluginId === pluginId && entry.pluginVersion === pluginVersion,
-  )
-  if (!spec) return null
-  const plugin = globalProviderRegistry.get(spec.pluginId, spec.pluginVersion)
-  const models = (plugin.manifest.models ?? []).map((model) => ({
-    id: model.id,
-    ...(model.name ? { name: model.name } : {}),
-  }))
-  const presetIds = modelPresets
-    .filter((preset) => isPluginPreset(preset, spec.pluginId, spec.pluginVersion))
-    .map((preset) => preset.id)
-  return {
-    key: spec.key,
-    pluginId: spec.pluginId,
-    pluginVersion: spec.pluginVersion,
-    providerId: spec.providerId,
-    adapter: spec.adapter,
-    displayName: spec.displayName,
-    ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
-    modality: spec.modality,
-    baseUrl: spec.baseUrl,
-    credential: spec.credential,
-    presetIds,
-    models,
-  }
+  const entry = BUILTIN_TEMPLATES.find(candidate => candidate.pluginId === pluginId && candidate.pluginVersion === pluginVersion)
+  return entry ? builtinTemplate(entry) : null
 }

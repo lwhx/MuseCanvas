@@ -361,8 +361,15 @@ test('legacy 1.0.0 manifest stays thin so pinned revisions keep their permissive
 })
 
 test('plugin-scan carries the declaration through instead of stripping it', () => {
+  // The legacy key's `any-https` endpoint policy is a shipped-plugin privilege that
+  // the upload validator refuses outright, so it is not part of this round trip.
+  const refused = validatePluginManifest(JSON.parse(JSON.stringify(legacySeedreamImageManifest)))
+  assert.equal(refused.ok, false)
+  if (!refused.ok) assert.deepEqual(refused.findings.map(finding => finding.rule), ['INVALID_CREDENTIAL_SPEC'])
   for (const manifest of [seedreamImageManifest, legacySeedreamImageManifest]) {
-    const validated = validatePluginManifest(JSON.parse(JSON.stringify(manifest)))
+    const input = JSON.parse(JSON.stringify(manifest))
+    if (manifest === legacySeedreamImageManifest) delete input.credential
+    const validated = validatePluginManifest(input)
     if (!validated.ok) {
       assert.fail(`manifest ${manifest.version} rejected: ${JSON.stringify(validated.findings)}`)
     }

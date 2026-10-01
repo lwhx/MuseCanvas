@@ -1,5 +1,5 @@
-import type { LanguageProviderManifest, MediaProviderManifest } from './types'
-import { isPrivateProviderHost } from './url-guard'
+import type { LanguageProviderManifest, MediaProviderManifest, PluginCredentialSpec } from './types'
+import { hostMatchesAllowlist, isPrivateProviderHost, urlHostOf } from './url-guard'
 import { validateModelCapabilities } from '@musecanvas/contracts'
 import type { JsonValue, ModelCapabilities } from '@musecanvas/contracts'
 
@@ -187,6 +187,10 @@ export function validatePluginManifest(
     if (!isSupportedCredentialSchema(schema)) reject('UNSUPPORTED_CREDENTIAL_SCHEMA', `credentialSchemas entry '${String(schema)}' is not one of ${SUPPORTED_CREDENTIAL_SCHEMAS.join(', ')}`)
   }
 
+  const credential = source.credential === undefined
+    ? undefined
+    : parseCredentialSpec(source.credential, (schemas || []) as unknown[], (hosts || []) as unknown[], reject)
+
   const models = Array.isArray(source.models) ? source.models : null
   if (!models || models.length === 0) {
     reject('EMPTY_MODEL_LIST', 'models must be a non-empty array; the active version rejects models outside this list, so an empty list silently permits everything')
@@ -252,6 +256,7 @@ export function validatePluginManifest(
         ...(typeof source.description === 'string' ? { description: source.description } : {}),
         allowedHosts: dedupeStrings(hosts as string[]),
         credentialSchemas: dedupeStrings(schemas as string[]),
+        ...(credential ? { credential } : {}),
         models: (models as Array<Record<string, unknown>>).map(model => normalizeMediaModel(model, declaredModalities as string[])),
       } satisfies MediaProviderManifest
     : {
@@ -263,10 +268,73 @@ export function validatePluginManifest(
         languageProtocols: dedupeStrings(declaredProtocols as string[]) as LanguageProviderManifest['languageProtocols'],
         allowedHosts: dedupeStrings(hosts as string[]),
         credentialSchemas: dedupeStrings(schemas as string[]),
+        ...(credential ? { credential } : {}),
         models: (models as Array<Record<string, unknown>>).map(normalizeLanguageModel),
       } satisfies LanguageProviderManifest
 
   return { ok: true, manifest }
+}
+
+const CREDENTIAL_TEXT_MAX = 200
+
+/**
+ * Validates an uploaded manifest's credential contract. `any-https` is refused:
+ * it widens egress to whatever host an admin types, which only a shipped plugin
+ * may ask for. A declared default endpoint must sit inside the plugin's own
+ * allowlist, or the default could never be called.
+ */
+function parseCredentialSpec(
+  value: unknown,
+  schemas: unknown[],
+  hosts: unknown[],
+  reject: (rule: string, message: string) => void,
+): PluginCredentialSpec | undefined {
+  const fail = (message: string) => {
+    reject('INVALID_CREDENTIAL_SPEC', message)
+    return undefined
+  }
+  if (!isRecord(value)) return fail('credential must be an object')
+  const providerId = typeof value.providerId === 'string' ? value.providerId : ''
+  if (!PLUGIN_ID_PATTERN.test(providerId)) return fail('credential.providerId must match ^[a-z][a-z0-9-]{1,40}$')
+  const schemaId = typeof value.schemaId === 'string' ? value.schemaId : ''
+  if (!schemas.includes(schemaId)) return fail('credential.schemaId must be one of the declared credentialSchemas')
+  const secret = isRecord(value.secret) ? value.secret : null
+  if (!secret) return fail('credential.secret must be an object')
+  if (secret.format !== 'text' && secret.format !== 'json') return fail("credential.secret.format must be 'text' or 'json'")
+  const label = typeof secret.label === 'string' ? secret.label.trim() : ''
+  if (!label || label.length > CREDENTIAL_TEXT_MAX) return fail(`credential.secret.label must be a non-empty string of at most ${CREDENTIAL_TEXT_MAX} characters`)
+  const optionalText = (field: 'placeholder' | 'help'): string | undefined | false => {
+    const raw = secret[field]
+    if (raw === undefined) return undefined
+    return typeof raw === 'string' && raw.length <= CREDENTIAL_TEXT_MAX ? raw : false
+  }
+  const placeholder = optionalText('placeholder')
+  const help = optionalText('help')
+  if (placeholder === false || help === false) return fail(`credential.secret.placeholder/help must be strings of at most ${CREDENTIAL_TEXT_MAX} characters`)
+  const baseUrl = isRecord(value.baseUrl) ? value.baseUrl : null
+  if (!baseUrl) return fail('credential.baseUrl must be an object')
+  if (baseUrl.policy !== 'fixed' && baseUrl.policy !== 'allowlisted') return fail("credential.baseUrl.policy must be 'fixed' or 'allowlisted'")
+  let defaultUrl: string | undefined
+  if (baseUrl.default !== undefined) {
+    const raw = typeof baseUrl.default === 'string' ? baseUrl.default : ''
+    const host = raw.startsWith('https://') ? urlHostOf(raw) : null
+    const allowlist = hosts.filter((entry): entry is string => typeof entry === 'string')
+    if (!host || !hostMatchesAllowlist(host, allowlist)) return fail('credential.baseUrl.default must be an https URL whose host is in allowedHosts')
+    defaultUrl = raw
+  } else if (baseUrl.policy === 'fixed') {
+    return fail("credential.baseUrl.default is required when policy is 'fixed'")
+  }
+  return {
+    providerId,
+    schemaId,
+    secret: {
+      format: secret.format,
+      label,
+      ...(placeholder ? { placeholder } : {}),
+      ...(help ? { help } : {}),
+    },
+    baseUrl: { ...(defaultUrl ? { default: defaultUrl } : {}), policy: baseUrl.policy },
+  }
 }
 
 export function isSupportedCredentialSchema(value: unknown): value is (typeof SUPPORTED_CREDENTIAL_SCHEMAS)[number] {

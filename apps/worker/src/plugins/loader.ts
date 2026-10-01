@@ -22,7 +22,7 @@ import { redactForLog } from '../provider-state'
 import {
   forgetPluginStatus,
   installedActiveCount,
-  isBuiltinMediaKey,
+  isBuiltinPluginKey,
   setPluginStatus,
   statusOf,
   trackedPluginKeys,
@@ -330,7 +330,7 @@ export async function loadPluginRow(row: PluginRow, deps: PluginLoaderDeps = {})
 
   // A bundle may never shadow a built-in: registration is append-only, so the key
   // would keep resolving to the image's code while the artifact silently went unused.
-  if (isBuiltinMediaKey(row.pluginId, row.pluginVersion)) {
+  if (isBuiltinPluginKey(row.pluginId, row.pluginVersion)) {
     return reject('PLUGIN_RESERVED_KEY', `${key} is reserved for a built-in plugin`)
   }
   if (row.status === 'disabled' || row.status === 'failed') {
@@ -455,7 +455,7 @@ async function runRefresh(deps: PluginLoaderDeps, full: boolean): Promise<Plugin
     }
     // A row the admin already marked `active` still needs importing after a worker
     // restart: the registries start empty each process, so reload from the cache.
-    const reserved = isBuiltinMediaKey(row.pluginId, row.pluginVersion)
+    const reserved = isBuiltinPluginKey(row.pluginId, row.pluginVersion)
     const needsLoad = (row.status === 'pending' || row.status === 'active')
       && (reserved || !globalPluginRegistry.has(row.pluginId, row.pluginVersion))
     if (!needsLoad) continue
@@ -477,7 +477,7 @@ async function runRefresh(deps: PluginLoaderDeps, full: boolean): Promise<Plugin
     // Soft-deleted or hard-deleted rows never appear in a result set; a periodic
     // full sweep is what stops the gate from trusting a stale `active` forever.
     for (const tracked of trackedPluginKeys()) {
-      if (isBuiltinMediaKey(tracked.pluginId, tracked.pluginVersion)) continue
+      if (isBuiltinPluginKey(tracked.pluginId, tracked.pluginVersion)) continue
       if (seen.has(formatPluginKey(tracked.pluginId, tracked.pluginVersion))) continue
       forgetPluginStatus(tracked.pluginId, tracked.pluginVersion)
       result.changed += 1

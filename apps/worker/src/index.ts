@@ -4,7 +4,7 @@ import { consume } from './queue'
 import { processJob } from './jobs'
 import { maintenance } from './maintenance'
 import { PLUGIN_BOOT_REFRESH_BUDGET_MS, refreshPlugins } from './plugins/loader'
-import { assertBuiltinMediaPluginsAvailable } from './plugins/availability'
+import { assertBuiltinPluginsAvailable } from './plugins/availability'
 
 async function main() {
   // Imports above stay side-effect free (no S3/DB connects at module load),
@@ -15,8 +15,8 @@ async function main() {
   assertBootstrapConfig()
   await redis.connect()
   // Every job path resolves through the availability gate, so verify here — not by
-  // assumption — that the built-in media keys it short-circuits really resolve.
-  assertBuiltinMediaPluginsAvailable()
+  // assumption — that the built-in keys (media and language) it short-circuits really resolve.
+  assertBuiltinPluginsAvailable()
   // The plugin catalog refresh is never allowed to gate boot: it swallows its own
   // errors and runs under a deadline, because a worker without S3 configured (or
   // with one wedged artifact) must still serve the built-in plugins. Installed

@@ -146,6 +146,18 @@ function buildManifest(version: string, active: boolean): MediaProviderManifest 
       : 'OpenAI DALL-E / GPT Image generations and edits via official or compatible APIs',
     allowedHosts: [...OPENAI_ALLOWED_HOSTS],
     credentialSchemas: [...OPENAI_CREDENTIAL_SCHEMAS],
+    credential: {
+      providerId: 'openai',
+      schemaId: 'legacy-api-key-v1',
+      secret: {
+        format: 'text',
+        label: 'OpenAI API Key',
+        placeholder: 'sk-...',
+        help: 'Official OpenAI API key with image generation access.',
+      },
+      // 1.1.0 is pinned to the official endpoint; 1.0.0 keeps serving compatible ones.
+      baseUrl: { default: 'https://api.openai.com', policy: active ? 'fixed' : 'any-https' },
+    },
     models: OPENAI_IMAGE_MODELS.map(model => projectManifestModel(model, active)),
   }
 }

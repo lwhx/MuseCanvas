@@ -20,6 +20,7 @@ import type {
   ProviderConfig,
 } from '../../core/types'
 import { NormalizedProviderError } from '../../core/errors'
+import { hostMatchesAllowlist } from '../../core/url-guard'
 
 export const SEEDANCE_VIDEO_PLUGIN_ID = 'seedance-video'
 export const SEEDANCE_VIDEO_PLUGIN_VERSION = '1.0.0'
@@ -193,6 +194,17 @@ export const seedanceVideoManifest: MediaProviderManifest = {
   description: 'ByteDance Seedance async video generation via the Ark Contents generations tasks API',
   allowedHosts: ['ark.cn-beijing.volces.com', 'ark.ap-southeast.bytepluses.com'],
   credentialSchemas: ['legacy-api-key-v1', 'json-v1'],
+  credential: {
+    providerId: 'volcengine',
+    schemaId: 'legacy-api-key-v1',
+    secret: {
+      format: 'text',
+      label: 'Volcengine Ark API Key',
+      placeholder: 'Ark API key',
+      help: 'Volcengine Ark API key with Seedance model access.',
+    },
+    baseUrl: { default: 'https://ark.cn-beijing.volces.com/api/v3', policy: 'allowlisted' },
+  },
   models: [
     {
       id: 'doubao-seedance-2-0-fast-260128',
@@ -215,18 +227,6 @@ type SeedanceContentEntry =
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function matchesAllowedHost(hostname: string, patterns: string[]): boolean {
-  const host = hostname.toLowerCase()
-  return patterns.some(pattern => {
-    const p = pattern.toLowerCase()
-    if (p.startsWith('*.')) {
-      const suffix = p.slice(1)
-      return host.endsWith(suffix) && host.length > suffix.length
-    }
-    return host === p
-  })
 }
 
 function parseRetryAfterMs(headers: Headers): number | undefined {
@@ -412,7 +412,7 @@ export class SeedanceVideoPlugin implements MediaProviderPlugin {
           `Invalid baseUrl '${candidate}': must use https:`,
         )
       }
-      if (!matchesAllowedHost(parsed.hostname, this.manifest.allowedHosts)) {
+      if (!hostMatchesAllowlist(parsed.hostname, this.manifest.allowedHosts)) {
         throw NormalizedProviderError.create(
           this.manifest.id,
           this.manifest.version,
@@ -713,7 +713,7 @@ export class SeedanceVideoPlugin implements MediaProviderPlugin {
           ).diagnostic,
         }
       }
-      if (parsed.protocol !== 'https:' || !matchesAllowedHost(parsed.hostname, this.manifest.allowedHosts)) {
+      if (parsed.protocol !== 'https:' || !hostMatchesAllowlist(parsed.hostname, this.manifest.allowedHosts)) {
         return {
           status: 'failed',
           remoteId,
@@ -852,7 +852,7 @@ export class SeedanceVideoPlugin implements MediaProviderPlugin {
         'Output url is not a valid URL',
       )
     }
-    if (parsed.protocol !== 'https:' || !matchesAllowedHost(parsed.hostname, this.manifest.allowedHosts)) {
+    if (parsed.protocol !== 'https:' || !hostMatchesAllowlist(parsed.hostname, this.manifest.allowedHosts)) {
       throw NormalizedProviderError.create(
         this.manifest.id,
         this.manifest.version,

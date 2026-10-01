@@ -28,6 +28,17 @@ Cookie 策略：本地 `compose.yaml` / `compose.dev.yaml` 直接通过 HTTP 提
 
 升级兼容（仅保留一个版本，可选）：升级前用旧密钥加密的会话/OTP（`SESSION_SECRET`）、OAuth 客户端凭据（`OAUTH_CREDENTIALS_ENCRYPTION_KEY`）、供应商凭据（`PROVIDER_CREDENTIALS_ENCRYPTION_KEY`）仍可通过只读回退继续读取，所有新写入只使用 `APP_MASTER_KEY` 派生的密钥。四个 Compose 文件的 API/worker 共享 `backend-env` 已透传这三个变量（均可选，缺省为空），新安装留空即可，下个版本移除。`scripts/generate-env.mjs` 只生成/补齐 bootstrap 密钥（`POSTGRES_PASSWORD`、`APP_MASTER_KEY`、`MINIO_ROOT_*`），从不生成旧密钥，已存在的值绝不改动。
 
+数据库迁移：`db-migrate` 执行的 `packages/database/src/migrate.ts` 只驱动顺序迁移器，按 `packages/database/migrations/NNNN_*.sql` 逐个文件在独立事务中执行并记入 `schema_migrations`（会话级 advisory lock 保证多实例只有一个执行者）。由旧版整块脚本建出的数据库没有历史记录，首次运行会被识别为 legacy 并完整重放一次（所有语句幂等），之后只执行新增文件。`tsx src/migrate.ts --dry-run` 只列出待执行的迁移。已执行的迁移文件不得修改或删除，变更一律新增文件。
+
+供应商凭据重新加密（升级到包含 `0027_credentials_converge` 的版本后执行一次）：把仍由旧 `PROVIDER_CREDENTIALS_ENCRYPTION_KEY` 加密的凭据改用 `APP_MASTER_KEY` 派生密钥重新加密，完成后该旧密钥即可从读路径移除。脚本逐行事务 + 比较并交换，可中断、可重跑，只输出凭据 id 与稳定错误码；任何一行失败都以非零退出码结束。
+
+```bash
+docker compose --project-directory . --env-file .env -f deploy/compose.yaml \
+  exec worker sh -c "pnpm --filter @musecanvas/database exec tsx ../../scripts/reencrypt-provider-credentials.ts --dry-run"
+```
+
+确认输出无 `failed` 后去掉 `--dry-run` 再执行一次。
+
 示例（仓库根目录）：
 
 ```bash

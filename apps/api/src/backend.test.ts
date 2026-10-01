@@ -14,11 +14,11 @@ import {
   MAX_INPUT_IMAGES,
 } from './modules/generation-uploads'
 import { retryPreparation } from './generation/job-retry'
-import { globalProviderRegistry } from '../../../packages/providers/src/index'
+import { globalProviderRegistry, resolveCredentialBaseUrl } from '../../../packages/providers/src/index'
 import { modelPresets, resolvePresetCapabilities, type VideoModelPreset } from './admin/model-presets'
 import { buildBuiltinProviderTemplates } from './admin/provider-templates'
-import { ACTIVE_IMAGE_PLUGIN_VERSION, imageBaseUrlAllowed, isEmptyInputOverride, manifestSupportsVendorModel, presetMatchesPersistedModel, presetRevisionContract, providerCredentialMatchesPluginTarget, validateImageModelContract, validatePluginSelection } from './modules/models/handlers'
-import { credentialTargetChanged, normalizeCredentialSchemaVersion, resolveCredentialPlugin, validateExplicitPluginCredential } from './modules/admin/provider-credentials'
+import { ACTIVE_IMAGE_PLUGIN_VERSION, isEmptyInputOverride, manifestSupportsVendorModel, presetMatchesPersistedModel, presetRevisionContract, manifestMediaSelection, validateImageModelContract } from './modules/models/handlers'
+import { resolveCatalogPlugin } from './modules/admin/plugin-catalog'
 import type pg from 'pg'
 import type { ModelCapabilities } from '@musecanvas/contracts'
 import {
@@ -386,45 +386,24 @@ test('image presets pin new configuration to the hardened 1.1.0 plugin keys', ()
   }
 })
 
-test('plugin selection validates through the registry and manifest modality', () => {
-  assert.deepEqual(validatePluginSelection('openai-image', '1.1.0', 'image'), { ok: true, mediaKind: 'image' })
-  assert.deepEqual(validatePluginSelection('seedream-image', '1.1.0', 'image'), { ok: true, mediaKind: 'image' })
+test('plugin selection validates through the catalog and manifest modality', async () => {
+  // The same two steps savePluginModel takes: catalog membership, then modality.
+  const select = async (pluginId: string, pluginVersion: string, kind: string) => {
+    const catalog = await resolveCatalogPlugin(pluginId, pluginVersion)
+    if (!catalog) return 'INVALID_PLUGIN'
+    const selection = manifestMediaSelection(catalog.manifest, kind)
+    return selection.ok ? selection.mediaKind : 'INVALID_MODALITY'
+  }
+  assert.equal(await select('openai-image', '1.1.0', 'image'), 'image')
+  assert.equal(await select('seedream-image', '1.1.0', 'image'), 'image')
   // Historical exact keys remain accepted for already-pinned revisions.
-  assert.deepEqual(validatePluginSelection('openai-image', '1.0.0', 'image'), { ok: true, mediaKind: 'image' })
-  assert.deepEqual(validatePluginSelection('seedream-image', '1.0.0', 'image'), { ok: true, mediaKind: 'image' })
-  assert.deepEqual(validatePluginSelection('does-not-exist', '9.9.9', 'image'), { ok: false, error: 'INVALID_PLUGIN' })
-  assert.deepEqual(validatePluginSelection('openai-image', '9.9.9', 'image'), { ok: false, error: 'INVALID_PLUGIN' })
+  assert.equal(await select('openai-image', '1.0.0', 'image'), 'image')
+  assert.equal(await select('seedream-image', '1.0.0', 'image'), 'image')
   // Manifest modality mismatch is rejected rather than adapter-routed.
-  assert.deepEqual(validatePluginSelection('openai-image', '1.1.0', 'video'), { ok: false, error: 'INVALID_MODALITY' })
-  assert.deepEqual(validatePluginSelection('seedream-image', '1.1.0', 'video'), { ok: false, error: 'INVALID_MODALITY' })
-})
-
-test('credential probe resolves explicit plugin identity and never guesses from provider', () => {
-  assert.deepEqual(
-    resolveCredentialPlugin({ plugin_id: 'seedream-image', plugin_version: '1.1.0' }, {}),
-    { pluginId: 'seedream-image', pluginVersion: '1.1.0' },
-  )
-  assert.deepEqual(
-    resolveCredentialPlugin(null, { configured_fields: { pluginId: 'openai-image', pluginVersion: '1.1.0' } }),
-    { pluginId: 'openai-image', pluginVersion: '1.1.0' },
-  )
-  assert.deepEqual(
-    resolveCredentialPlugin(null, { configured_fields: JSON.stringify({ pluginId: 'openai-image', pluginVersion: '1.0.0' }) }),
-    { pluginId: 'openai-image', pluginVersion: '1.0.0' },
-  )
-  // Linked identity wins over the credential's own configured identity.
-  assert.deepEqual(
-    resolveCredentialPlugin(
-      { plugin_id: 'seedream-image', plugin_version: '1.1.0' },
-      { configured_fields: { pluginId: 'openai-image', pluginVersion: '1.1.0' } },
-    ),
-    { pluginId: 'seedream-image', pluginVersion: '1.1.0' },
-  )
-  // An unlinked credential without plugin identity resolves to null so the
-  // probe can return a clear PLUGIN_NOT_LINKED error instead of guessing.
-  assert.equal(resolveCredentialPlugin(null, {}), null)
-  assert.equal(resolveCredentialPlugin(null, { configured_fields: {} }), null)
-  assert.equal(resolveCredentialPlugin({ plugin_id: 'seedream-image' }, {}), null)
+  assert.equal(await select('openai-image', '1.1.0', 'video'), 'INVALID_MODALITY')
+  assert.equal(await select('seedream-image', '1.1.0', 'video'), 'INVALID_MODALITY')
+  // A language plugin is a real catalog key but can never back a media model.
+  assert.equal(await select('openai-language', '1.0.0', 'image'), 'INVALID_MODALITY')
 })
 
 test('historical 1.0.0 revision rows stay readable through the model DTOs', () => {
@@ -619,13 +598,15 @@ test('the image contract gate exercises the declared values, not the flat column
   assert.equal((await gate('no-such-model', {})).ok, false)
   // Seedream 4.5 has always refused the 1K grid 4.0 offered.
   assert.equal((await gate('doubao-seedream-4-5-251128', { parameters: [{ type: 'enum', name: 'size', options: ['1024x1024'] }] }, seedream)).ok, false)
-  // Official endpoint hosts only; empty means the plugin default applies.
-  assert.equal(imageBaseUrlAllowed('openai-image', 'https://api.openai.com'), true)
-  assert.equal(imageBaseUrlAllowed('openai-image', null), true)
-  assert.equal(imageBaseUrlAllowed('openai-image', 'https://proxy.example.com'), false)
-  assert.equal(imageBaseUrlAllowed('seedream-image', 'https://ark.cn-beijing.volces.com'), true)
-  assert.equal(imageBaseUrlAllowed('seedream-image', 'https://api.openai.com'), false)
-  assert.equal(imageBaseUrlAllowed('openai-image', ''), true)
+  // Official endpoint hosts only (the manifests' `fixed` policy); empty means the plugin default applies.
+  const openaiManifest = globalProviderRegistry.get('openai-image', '1.1.0').manifest
+  const seedreamManifest = globalProviderRegistry.get('seedream-image', '1.1.0').manifest
+  assert.equal(resolveCredentialBaseUrl(openaiManifest, 'https://api.openai.com').ok, true)
+  assert.equal(resolveCredentialBaseUrl(openaiManifest, null).ok, true)
+  assert.equal(resolveCredentialBaseUrl(openaiManifest, 'https://proxy.example.com').ok, false)
+  assert.equal(resolveCredentialBaseUrl(seedreamManifest, 'https://ark.cn-beijing.volces.com').ok, true)
+  assert.equal(resolveCredentialBaseUrl(seedreamManifest, 'https://api.openai.com').ok, false)
+  assert.equal(resolveCredentialBaseUrl(openaiManifest, '').ok, true)
 })
 
 test('resolvePresetCapabilities reads the manifest and never fills in a contract', async () => {
@@ -742,32 +723,6 @@ test('caller-supplied contracts are refused for every media kind', () => {
   }
 })
 
-test('active image upsert inspects the attached credential base URL', () => {
-  const here = dirname(fileURLToPath(import.meta.url))
-  const source = readFileSync(join(here, './modules/models/handlers.ts'), 'utf8')
-  assert.ok(source.includes('SELECT id,base_url,provider_id,configured_fields FROM provider_credentials'))
-})
-
-test('credential schema versions stay positive safe integers', () => {
-  assert.deepEqual(normalizeCredentialSchemaVersion(undefined), { ok: true, version: undefined })
-  assert.deepEqual(normalizeCredentialSchemaVersion(undefined, 1), { ok: true, version: 1 })
-  assert.deepEqual(normalizeCredentialSchemaVersion(2), { ok: true, version: 2 })
-  assert.deepEqual(normalizeCredentialSchemaVersion('3'), { ok: true, version: 3 })
-  for (const bad of [0, -1, 1.5, Number.NaN, 'abc', null]) {
-    assert.deepEqual(normalizeCredentialSchemaVersion(bad), { ok: false })
-  }
-})
-
-test('credential host or plugin redirects require a newly supplied secret', () => {
-  const stored = { baseUrl: 'https://api.openai.com', pluginId: 'openai-image', pluginVersion: '1.1.0' }
-  assert.equal(credentialTargetChanged(stored, { ...stored }), false)
-  assert.equal(credentialTargetChanged(stored, { ...stored, baseUrl: 'https://proxy.example.com' }), true)
-  assert.equal(credentialTargetChanged(stored, { ...stored, pluginId: 'seedream-image' }), true)
-  assert.equal(credentialTargetChanged(stored, { ...stored, pluginVersion: '1.0.0' }), true)
-  assert.equal(credentialTargetChanged({ baseUrl: null }, { baseUrl: '' }), false)
-  assert.equal(credentialTargetChanged({ baseUrl: null }, { baseUrl: 'https://api.openai.com' }), true)
-})
-
 test('hardened 1.1.0 image manifests gate vendor models; custom IDs stay on 1.0.0', () => {
   const openaiModels = globalProviderRegistry.get('openai-image', '1.1.0').manifest.models || []
   const seedreamModels = globalProviderRegistry.get('seedream-image', '1.1.0').manifest.models || []
@@ -807,10 +762,20 @@ test('builtin provider templates expose exactly the four current plugins', () =>
     ['veo-video', '1.0.0', 'google', 'veo', 'video', 'https://us-central1-aiplatform.googleapis.com'],
   )
   assert.deepEqual(byKey['openai-image'].credential, {
-    schemaId: 'legacy-api-key-v1', schemaVersion: 1, kind: 'api_key',
+    schemaId: 'legacy-api-key-v1', schemaVersion: 1, format: 'text', kind: 'api_key',
     label: 'OpenAI API Key', placeholder: 'sk-...',
     helpText: 'Official OpenAI API key with image generation access.',
+    baseUrlPolicy: 'fixed',
   })
+  assert.deepEqual(
+    templates.map((template) => [template.key, template.credential.format, template.credential.baseUrlPolicy]),
+    [
+      ['openai-image', 'text', 'fixed'],
+      ['seedream-image', 'text', 'fixed'],
+      ['seedance-video', 'text', 'allowlisted'],
+      ['veo-video', 'json', 'allowlisted'],
+    ],
+  )
   assert.equal(byKey['seedream-image'].credential.kind, 'api_key')
   assert.equal(byKey['seedance-video'].credential.kind, 'api_key')
   assert.deepEqual([byKey['veo-video'].credential.schemaId, byKey['veo-video'].credential.kind], ['json-v1', 'google_service_account'])
@@ -849,30 +814,6 @@ test('builtin provider templates expose exactly the four current plugins', () =>
   }
 })
 
-test('model credentials require exact plugin identity with legacy provider fallback only', () => {
-  const target = { providerId: 'google', pluginId: 'veo-video', pluginVersion: '1.0.0' }
-  assert.equal(providerCredentialMatchesPluginTarget({
-    provider_id: 'google',
-    configured_fields: { pluginId: 'veo-video', pluginVersion: '1.0.0' },
-  }, target), true)
-  assert.equal(providerCredentialMatchesPluginTarget({
-    provider_id: 'google',
-    configured_fields: { pluginId: 'veo-video', pluginVersion: '2.0.0' },
-  }, target), false)
-  assert.equal(providerCredentialMatchesPluginTarget({
-    provider_id: 'google',
-    configured_fields: { pluginId: 'veo-video' },
-  }, target), false)
-  assert.equal(providerCredentialMatchesPluginTarget({
-    provider_id: 'google',
-    configured_fields: {},
-  }, target), true)
-  assert.equal(providerCredentialMatchesPluginTarget({
-    provider_id: 'volcengine',
-    configured_fields: {},
-  }, target), false)
-})
-
 test('stored preset lookup never upgrades an explicitly pinned plugin version', () => {
   const preset = modelPresets.find((entry) => entry.id === 'openai-gpt-image-2')
   assert.ok(preset)
@@ -901,65 +842,6 @@ test('admin provider templates route serves the registry-backed catalog', () => 
   const source = readFileSync(join(here, './router/routes.ts'), 'utf8')
   assert.ok(source.includes("admin/provider-templates"))
   assert.ok(source.includes('buildBuiltinProviderTemplates'))
-})
-
-test('explicit plugin credentials validate the plugin, schema, catalog metadata, and secret', async () => {
-  const unknown = await validateExplicitPluginCredential({ pluginId: 'does-not-exist', pluginVersion: '9.9.9', secretPayload: 'sk-x' })
-  assert.equal(unknown.ok, false)
-  assert.equal(unknown.ok ? null : unknown.code, 'INVALID_PLUGIN')
-  const undeclaredSchema = await validateExplicitPluginCredential({
-    pluginId: 'veo-video', pluginVersion: '1.0.0', schemaId: 'legacy-api-key-v1', providerId: 'google', secretPayload: 'sk-x',
-  })
-  assert.equal(undeclaredSchema.ok, false)
-  assert.equal(undeclaredSchema.ok ? null : undeclaredSchema.code, 'INVALID_INPUT')
-  const malformedVeo = await validateExplicitPluginCredential({
-    pluginId: 'veo-video', pluginVersion: '1.0.0', schemaId: 'json-v1', providerId: 'google', secretPayload: '{broken json',
-  })
-  assert.equal(malformedVeo.ok, false)
-  assert.equal(malformedVeo.ok ? null : malformedVeo.code, 'INVALID_CREDENTIAL')
-  const incompleteServiceAccount = await validateExplicitPluginCredential({
-    pluginId: 'veo-video', pluginVersion: '1.0.0', schemaId: 'json-v1', providerId: 'google',
-    secretPayload: JSON.stringify({ type: 'service_account', project_id: 'demo', client_email: 'veo@demo.iam.gserviceaccount.com' }),
-  })
-  assert.equal(incompleteServiceAccount.ok, false)
-  assert.equal(incompleteServiceAccount.ok ? null : incompleteServiceAccount.code, 'INVALID_CREDENTIAL')
-  const wrongProvider = await validateExplicitPluginCredential({
-    pluginId: 'openai-image', pluginVersion: '1.1.0', providerId: 'volcengine', secretPayload: 'sk-test-key',
-  })
-  assert.equal(wrongProvider.ok, false)
-  assert.equal(wrongProvider.ok ? null : wrongProvider.code, 'INVALID_INPUT')
-  const wrongBaseUrl = await validateExplicitPluginCredential({
-    pluginId: 'openai-image', pluginVersion: '1.1.0', providerId: 'openai',
-    baseUrl: 'https://proxy.example.com', secretPayload: 'sk-test-key',
-  })
-  assert.equal(wrongBaseUrl.ok, false)
-  assert.equal(wrongBaseUrl.ok ? null : wrongBaseUrl.code, 'INVALID_BASE_URL')
-  // Built-in credentials resolve deterministically with catalog metadata.
-  const openai = await validateExplicitPluginCredential({
-    pluginId: 'openai-image', pluginVersion: '1.1.0', providerId: 'openai', secretPayload: 'sk-test-key-123',
-  })
-  assert.equal(openai.ok, true)
-  if (openai.ok) {
-    assert.deepEqual(
-      [openai.pluginId, openai.pluginVersion, openai.schemaId, openai.schemaVersion, openai.baseUrl],
-      ['openai-image', '1.1.0', 'legacy-api-key-v1', 1, 'https://api.openai.com'],
-    )
-  }
-  const serviceAccount = JSON.stringify({
-    type: 'service_account', project_id: 'demo-project',
-    client_email: 'veo@demo-project.iam.gserviceaccount.com',
-    private_key: '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n',
-  })
-  const veo = await validateExplicitPluginCredential({
-    pluginId: 'veo-video', pluginVersion: '1.0.0', schemaId: 'json-v1', providerId: 'google', secretPayload: serviceAccount,
-  })
-  assert.equal(veo.ok, true)
-  if (veo.ok) {
-    assert.deepEqual(
-      [veo.pluginId, veo.pluginVersion, veo.schemaId, veo.baseUrl],
-      ['veo-video', '1.0.0', 'json-v1', 'https://us-central1-aiplatform.googleapis.com'],
-    )
-  }
 })
 
 test('prompt template import validation enforces counts, names, variables, and braces', () => {

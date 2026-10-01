@@ -5,6 +5,7 @@ import { processJob } from './jobs'
 import { maintenance } from './maintenance'
 import { PLUGIN_BOOT_REFRESH_BUDGET_MS, refreshPlugins } from './plugins/loader'
 import { assertBuiltinPluginsAvailable } from './plugins/availability'
+import { runCredentialTests } from './credentials/probe'
 
 async function main() {
   // Imports above stay side-effect free (no S3/DB connects at module load),
@@ -44,6 +45,16 @@ async function main() {
   }
   await runMaintenance()
   setInterval(runMaintenance, 5000)
+  // Credential tests have an admin waiting on them, so they get their own short
+  // cadence instead of queueing behind maintenance or a long generation job.
+  let testing = false
+  setInterval(async () => {
+    if (testing) return
+    testing = true
+    try { await runCredentialTests() }
+    catch (error) { console.error('credential tests failed', { code: error instanceof Error ? error.name : 'ERROR' }) }
+    finally { testing = false }
+  }, 2000)
   await consume(processJob)
 }
 main().catch(error => { console.error('worker fatal', { code: error instanceof Error ? error.name : 'ERROR' }); process.exit(1) })

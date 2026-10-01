@@ -39,6 +39,8 @@ docker compose --project-directory . --env-file .env -f deploy/compose.yaml \
 
 确认输出无 `failed` 后去掉 `--dry-run` 再执行一次。
 
+供应商凭据连通测试由 `worker` 执行（只有它会加载插件代码，上传插件同样可测）：`api` 在凭据行上登记测试请求并最多等待约 20 秒，`worker` 每 2 秒领取一次待测请求。`worker` 未运行时测试会停留在“测试中”，启动后自动完成。
+
 示例（仓库根目录）：
 
 ```bash

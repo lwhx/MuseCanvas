@@ -90,6 +90,8 @@ export function AdminMediaModelsView() {
       const res = await api<ProviderCredential[]>(API_ENDPOINTS.admin.providerCredentials)
       return res.data || []
     },
+    // Connectivity tests settle in the worker; poll only while one is open.
+    refetchInterval: (query) => (query.state.data?.some((c) => c.lastTestStatus === 'pending') ? 2000 : false),
   })
 
   const {
@@ -114,7 +116,12 @@ export function AdminMediaModelsView() {
 
   const selectedPreset = presets.find((p) => p.id === selectedPresetId) || null
   const selectedPresetPluginKey = presetPluginKey(selectedPreset)
-  const matchingCredentials = credentialsForPreset(allCredentials, selectedPreset)
+  // The template carries the plugin's endpoint policy, so the picker never offers
+  // a credential the API would refuse to bind.
+  const selectedTemplate = templates.find(
+    (t) => t.pluginId === selectedPreset?.pluginId && t.pluginVersion === selectedPreset?.pluginVersion,
+  ) ?? null
+  const matchingCredentials = credentialsForPreset(allCredentials, selectedPreset, selectedTemplate)
 
   const linkedModelsByCredential: Record<string, string[]> = {}
   for (const m of models) {
@@ -356,8 +363,8 @@ export function AdminMediaModelsView() {
               供应商插件目录
             </h2>
             <p className="max-w-reading text-sm text-muted-foreground">
-              由 provider registry 提供的内置图像 / 视频插件。媒体凭据必须绑定插件身份，否则无法通过连通测试；
-              请使用卡片上的「创建凭据」为指定插件签发凭据。
+              由 provider registry 提供的内置图像 / 视频插件。凭据属于供应商账号：从卡片「创建凭据」时按该插件声明的
+              格式与端点校验，同一账号下的其它插件也可以使用。
             </p>
           </div>
         </div>
@@ -433,8 +440,6 @@ export function AdminMediaModelsView() {
                   <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
                     <dt className="text-muted-foreground">供应商</dt>
                     <dd className="font-mono">{t.providerId}</dd>
-                    <dt className="text-muted-foreground">适配器</dt>
-                    <dd className="font-mono">{t.adapter}</dd>
                     <dt className="text-muted-foreground">Base URL</dt>
                     <dd className="break-all font-mono">{t.baseUrl}</dd>
                     <dt className="text-muted-foreground">凭据</dt>
@@ -490,7 +495,7 @@ export function AdminMediaModelsView() {
               媒体凭据
             </h2>
             <p className="max-w-reading text-sm text-muted-foreground">
-              绑定插件身份的图像 / 视频凭据。语言模型使用的无插件凭据在「语言模型」页配置。
+              从插件模板创建的图像 / 视频凭据。语言模型与自定义凭据在「语言模型」页配置。
             </p>
           </div>
           <Button
@@ -514,7 +519,7 @@ export function AdminMediaModelsView() {
         {allCredentials.some(isCustomCredential) && (
           <p className="text-xs text-muted-foreground">
             另有 <span className="font-mono tabular-nums">{allCredentials.filter(isCustomCredential).length}</span>{' '}
-            个无插件身份的自定义 / 语言模型凭据，由「语言模型」页管理。
+            个未经插件模板创建的自定义 / 语言模型凭据，由「语言模型」页管理。
           </p>
         )}
       </section>
@@ -575,7 +580,7 @@ export function AdminMediaModelsView() {
                 selectedPreset ? (
                   <>
                     {selectedPresetPluginKey ? (
-                      <>需要插件 <span className="font-mono text-foreground">{selectedPresetPluginKey}</span> 的凭据</>
+                      <>需要供应商 <span className="font-mono text-foreground">{selectedPreset.providerId || '-'}</span> 的凭据（插件 <span className="font-mono text-foreground">{selectedPresetPluginKey}</span>）</>
                     ) : (
                       <>按适配协议 <span className="font-mono text-foreground">{selectedPreset.adapter || '-'}</span> 匹配凭据</>
                     )}

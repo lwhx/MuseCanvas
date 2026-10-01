@@ -1,4 +1,5 @@
 import { signedAssetUrl } from './services'
+import { hasStoredCredentialSecret, type StoredCredentialFields } from '../../../../packages/providers/src/index'
 import { enumOptionValues, validateModelCapabilities } from '@musecanvas/contracts'
 import type {
   GenerationMode,
@@ -405,8 +406,8 @@ export function providerCredentialDto(row: Record<string, unknown>) {
     baseUrl: (row.base_url as string) || '',
     enabled: Boolean(row.enabled),
     // Secrets are write-only: only presence and fingerprint are exposed.
-    hasCredential: Boolean(row.payload_encrypted || row.api_key_encrypted),
-    hasApiKey: Boolean(row.payload_encrypted || row.api_key_encrypted),
+    hasCredential: hasStoredCredentialSecret(row as StoredCredentialFields),
+    hasApiKey: hasStoredCredentialSecret(row as StoredCredentialFields),
     keyFingerprint: ((row.api_key_fingerprint as string) || (configured.apiKeyFingerprint as string)) || undefined,
     configuredFields: Object.fromEntries(
       Object.entries(configured).filter(([key]) => !['apiKey', 'key', 'secret', 'token'].includes(key)),

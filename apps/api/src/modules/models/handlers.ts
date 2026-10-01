@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { db, transaction } from '../../../../../packages/database/src/index'
+import { db, findProviderCredential, transaction } from '../../../../../packages/database/src/index'
 import { createModelConfigRevision } from '@musecanvas/database'
 import type { JsonValue, ModelCapabilities } from '@musecanvas/contracts'
 import { enumOptionValues } from '@musecanvas/contracts'
@@ -8,7 +8,8 @@ import { fail, ok } from '../../shared/http'
 import { capabilitiesFromRow, defaultsFromRow, legacyColumnsFromCapabilities, modelDto } from '../../shared/dto'
 import { normalizedProviderBaseUrl, sanitizeReasoningEffort } from '../../shared/model-helpers'
 import { resolveCatalogPlugin, resolvePresetById } from '../admin/plugin-catalog'
-import { globalProviderRegistry, MAX_INPUT_IMAGES } from '../../../../../packages/providers/src/index'
+import { credentialBindingError } from '../admin/credentials/validate'
+import { globalProviderRegistry, MAX_INPUT_IMAGES, pluginCredentialSpec, resolveCredentialBaseUrl } from '../../../../../packages/providers/src/index'
 import type { AnyProviderManifest } from '../../../../../packages/providers/src/index'
 import type { MediaProviderPlugin } from '../../../../../packages/providers/src/index'
 import { resolvePresetCapabilities, type ModelPreset } from '../../admin/model-presets'
@@ -40,17 +41,6 @@ export function manifestMediaSelection(
   return { ok: true, mediaKind: modelKind as 'image' | 'video' }
 }
 
-export function validatePluginSelection(
-  pluginId: string,
-  pluginVersion: string,
-  modelKind: string,
-): { ok: true; mediaKind: 'image' | 'video' } | { ok: false; error: 'INVALID_PLUGIN' | 'INVALID_MODALITY' } {
-  if (!globalProviderRegistry.has(pluginId, pluginVersion)) return { ok: false, error: 'INVALID_PLUGIN' }
-  const selection = manifestMediaSelection(globalProviderRegistry.get(pluginId, pluginVersion).manifest, modelKind)
-  if (!selection.ok) return { ok: false, error: 'INVALID_MODALITY' }
-  return selection
-}
-
 // Manifest vendor-model gate for the hardened image keys. An empty model list
 // means the plugin accepts any vendor model ID; a nonempty list is exhaustive.
 export function manifestSupportsVendorModel(
@@ -61,24 +51,6 @@ export function manifestSupportsVendorModel(
   return manifestModels.some((model) => model.id === vendorModelId)
 }
 
-// Official endpoint hosts for the hardened image keys. Active image
-// configuration must point at these hosts (or leave the base URL empty so the
-// plugin default applies); compatible/custom endpoints cannot use 1.1.0.
-export const IMAGE_PLUGIN_OFFICIAL_HOSTS: Record<string, string> = {
-  'openai-image': 'api.openai.com',
-  'seedream-image': 'ark.cn-beijing.volces.com',
-}
-
-export function imageBaseUrlAllowed(pluginId: string, baseUrl: string | null | undefined): boolean {
-  const official = IMAGE_PLUGIN_OFFICIAL_HOSTS[pluginId]
-  if (!official) return true
-  if (baseUrl === undefined || baseUrl === null || baseUrl === '') return true
-  try {
-    return new URL(baseUrl).hostname.toLowerCase() === official
-  } catch {
-    return false
-  }
-}
 
 export type ImageModelContract = {
   vendorModelId: string
@@ -184,49 +156,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null
 }
 
-function configuredPluginIdentity(row: Record<string, unknown>): {
-  pluginId?: string
-  pluginVersion?: string
-  hasIdentityField: boolean
-} {
-  let configured: Record<string, unknown> = {}
-  if (typeof row.configured_fields === 'object' && row.configured_fields !== null) {
-    configured = row.configured_fields as Record<string, unknown>
-  } else if (typeof row.configured_fields === 'string') {
-    try {
-      const parsed = JSON.parse(row.configured_fields) as unknown
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        configured = parsed as Record<string, unknown>
-      }
-    } catch {
-      configured = {}
-    }
-  }
-  const pluginId =
-    typeof configured.pluginId === 'string' && configured.pluginId.trim()
-      ? configured.pluginId.trim()
-      : undefined
-  const pluginVersion =
-    typeof configured.pluginVersion === 'string' && configured.pluginVersion.trim()
-      ? configured.pluginVersion.trim()
-      : undefined
-  return {
-    pluginId,
-    pluginVersion,
-    hasIdentityField: pluginId !== undefined || pluginVersion !== undefined,
-  }
-}
-
-export function providerCredentialMatchesPluginTarget(
-  credential: Record<string, unknown>,
-  target: { providerId: string; pluginId: string; pluginVersion: string },
-): boolean {
-  const identity = configuredPluginIdentity(credential)
-  if (identity.hasIdentityField) {
-    return identity.pluginId === target.pluginId && identity.pluginVersion === target.pluginVersion
-  }
-  return credential.provider_id === target.providerId
-}
 
 export function presetMatchesPersistedModel(
   preset: ModelPreset,
@@ -420,10 +349,11 @@ async function savePluginModel(
       const pinned = id && existing?.plugin_id === pluginId && existing?.plugin_version === pluginVersion
       if (!pinned) return fail('INVALID_INPUT', '新的图片模型配置必须使用插件版本 1.1.0')
     }
+    // The plugin declares which provider account it consumes; a caller-supplied id
+    // is kept for compatibility but defaults to the declaration.
     const providerId = (typeof input.providerId === 'string' && input.providerId.trim()
       ? input.providerId.trim()
-      : existing?.provider_id || null) as string | null
-    if (!providerId) return fail('INVALID_INPUT', '供应商 ID（providerId）必填')
+      : existing?.provider_id || pluginCredentialSpec(catalog.manifest).providerId) as string
     const displayName = (typeof input.displayName === 'string' && input.displayName.trim()
       ? input.displayName.trim()
       : existing?.display_name) as string | undefined
@@ -446,32 +376,19 @@ async function savePluginModel(
       ? normalizedProviderBaseUrl(input.baseUrl)
       : (existing?.base_url ?? undefined)
     if (baseUrl === null) return fail('INVALID_BASE_URL', 'Base URL 必须是安全的 HTTPS 地址')
-    if (hardenedImageWrite) {
-      const effectiveBase = (baseUrl === undefined ? existing?.base_url : baseUrl) as string | null | undefined
-      if (!imageBaseUrlAllowed(pluginId, effectiveBase)) {
-        return fail('INVALID_BASE_URL', '图片插件 1.1.0 仅支持官方服务端点')
-      }
+    // The plugin's declared endpoint policy, the same rule a credential's base URL
+    // is held to (a `fixed` plugin such as image 1.1.0 accepts only its official host).
+    const effectiveBase = (baseUrl === undefined ? existing?.base_url : baseUrl) as string | null | undefined
+    if (!resolveCredentialBaseUrl(catalog.manifest, effectiveBase).ok) {
+      return fail('INVALID_BASE_URL', 'Base URL 不符合该插件的服务端点策略')
     }
     const credId = input.providerCredentialId
     const effectiveCredId = credId === undefined ? existing?.provider_credential_id : credId
     if (typeof effectiveCredId === 'string' && effectiveCredId) {
-      const cred = await db().query(
-        'SELECT id,base_url,provider_id,configured_fields FROM provider_credentials WHERE id=$1 AND deleted_at IS NULL',
-        [effectiveCredId],
-      )
-      if (!cred.rows[0]) return fail('INVALID_INPUT', '供应商凭据不存在')
-      if (!providerCredentialMatchesPluginTarget(cred.rows[0], { providerId, pluginId, pluginVersion })) {
-        return fail('INVALID_INPUT', '供应商凭据与模型插件不匹配')
-      }
-      // A credential base URL overrides the model base URL at runtime, so a
-      // custom-host credential must be rejected for hardened image keys even
-      // when the model itself points at the official endpoint.
-      if (hardenedImageWrite) {
-        const credBase = cred.rows[0]?.base_url as string | null | undefined
-        if (!imageBaseUrlAllowed(pluginId, credBase)) {
-          return fail('INVALID_BASE_URL', '该供应商凭据的 Base URL 非官方服务端点，不能用于图片插件 1.1.0')
-        }
-      }
+      const cred = await findProviderCredential(db(), effectiveCredId)
+      if (!cred) return fail('INVALID_INPUT', '供应商凭据不存在')
+      const bindingError = credentialBindingError(catalog.manifest, cred)
+      if (bindingError) return fail(bindingError.code, bindingError.message)
     }
     const concurrencyLimit = input.concurrencyLimit === undefined
       ? Number(existing?.concurrency_limit ?? 1)
@@ -581,21 +498,16 @@ async function savePresetModel(
   if (targetKind === 'language' && (typeof effectiveCredId !== 'string' || !effectiveCredId))
     return fail('LANGUAGE_MODEL_CONFIG_INVALID', '语言模型必须选择供应商凭据')
   if (typeof effectiveCredId === 'string' && effectiveCredId) {
-    const cred = await db().query(
-      'SELECT id,provider_id,configured_fields FROM provider_credentials WHERE id=$1 AND deleted_at IS NULL',
-      [effectiveCredId],
-    )
-    if (!cred.rows[0]) return fail('INVALID_INPUT', '供应商凭据不存在')
-    if (
-      targetPreset &&
-      'pluginId' in targetPreset &&
-      !providerCredentialMatchesPluginTarget(cred.rows[0], {
-        providerId: targetPreset.providerId,
-        pluginId: targetPreset.pluginId,
-        pluginVersion: targetPreset.pluginVersion,
-      })
-    ) {
-      return fail('INVALID_INPUT', '供应商凭据与模型插件不匹配')
+    const cred = await findProviderCredential(db(), effectiveCredId)
+    if (!cred) return fail('INVALID_INPUT', '供应商凭据不存在')
+    // Media presets bind through their plugin's declared credential contract, the
+    // same check the plugin-selected write applies. Language presets keep accepting
+    // any credential: a compatible gateway may speak another vendor's protocol.
+    if (targetPreset && 'pluginId' in targetPreset) {
+      const catalog = await resolveCatalogPlugin(targetPreset.pluginId, String(targetPreset.pluginVersion))
+      if (!catalog) return fail('INVALID_PLUGIN', '供应商插件不存在或版本不受支持')
+      const bindingError = credentialBindingError(catalog.manifest, cred)
+      if (bindingError) return fail(bindingError.code, bindingError.message)
     }
   }
   if (targetPreset && 'adapter' in targetPreset && !['openai', 'seedream', 'anthropic'].includes(String(targetPreset.adapter)))
@@ -625,7 +537,7 @@ async function savePresetModel(
   // Which resolution path this write pins: 'installed' only when the preset's exact
   // key resolves to an active provider_plugins row. Built-in and language presets
   // keep 'builtin'. Membership is probed in the catalog, never inferred from the
-  // backfilled model_configs.plugin_id column.
+  // model_configs.plugin_id column.
   const presetPluginId = targetPreset && 'pluginId' in targetPreset ? targetPreset.pluginId : null
   const presetPluginVersion = targetPreset && 'pluginVersion' in targetPreset ? String(targetPreset.pluginVersion) : '1.0.0'
   const presetPluginSource = (presetPluginId && (await resolveCatalogPlugin(presetPluginId, presetPluginVersion))?.source === 'installed')

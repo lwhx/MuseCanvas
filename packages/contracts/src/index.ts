@@ -319,13 +319,21 @@ export type ProviderRunPublic = Omit<ProviderRun, 'clientToken' | 'leaseToken' |
 
 // Built-in provider configuration templates. The admin API serves these from
 // the provider registry; the browser admin UI mirrors this shape locally.
+// Projection of the plugin manifest's `credential` contract (see
+// PluginCredentialSpec in packages/providers): the plugin, not the host, says what
+// it needs and how strictly its endpoint is pinned.
 export interface BuiltinProviderTemplateCredential {
   schemaId: string
   schemaVersion: number
+  /** How the secret is entered: a bare key (`text`) or a pasted JSON object (`json`). */
+  format: 'text' | 'json'
+  /** @deprecated Derived from `format` (`json` -> 'google_service_account'); read `format`. */
   kind: 'api_key' | 'google_service_account'
   label: string
   placeholder?: string
   helpText?: string
+  /** `fixed`: only `baseUrl`; `allowlisted`: hosts the plugin allows; `any-https`: any safe endpoint. */
+  baseUrlPolicy: 'fixed' | 'allowlisted' | 'any-https'
 }
 
 export interface BuiltinProviderTemplateModel {

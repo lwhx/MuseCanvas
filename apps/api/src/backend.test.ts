@@ -44,6 +44,16 @@ import { validateTemplateImport as validateSetupTemplateImport } from './modules
 
 process.env.SESSION_SECRET = 'test-session-secret-with-enough-entropy'
 
+/** Every schema migration, concatenated in execution order (the deployed schema source). */
+function migrationSource(here: string): string {
+  const dir = join(here, '../../../packages/database/migrations')
+  return readdirSync(dir)
+    .filter(name => /^\d{4}_.+\.sql$/.test(name))
+    .sort()
+    .map(name => readFileSync(join(dir, name), 'utf8'))
+    .join('\n')
+}
+
 test('OTP hashes are scoped to the email and compare in constant time', () => {
   const hash = hashOtp('one@example.com', '123456')
   assert.equal(safeEqual(hash, hashOtp('one@example.com', '123456')), true)
@@ -60,7 +70,7 @@ test('OTP hashes are scoped to the email and compare in constant time', () => {
 // read one contract.
 
 test('provider presets are identity-only and keep the pinned host slugs', async () => {
-  // `model_configs.preset_id` values are pinned by the migrate.ts eligibility
+  // `model_configs.preset_id` values are pinned by the migrations' eligibility
   // checks and by presetMatchesPersistedModel, so the slugs are load-bearing.
   assert.deepEqual(
     modelPresets.map((preset) => preset.id),
@@ -462,7 +472,7 @@ test('historical 1.0.0 revision rows stay readable through the model DTOs', () =
 
 test('image 1.1.0 cutover appends immutable revisions without rewriting history', () => {
   const here = dirname(fileURLToPath(import.meta.url))
-  const source = readFileSync(join(here, '../../../packages/database/src/migrate.ts'), 'utf8')
+  const source = migrationSource(here)
   const cutoverStart = source.indexOf('10. Image plugin 1.1.0 cutover')
   // Section 10 only: billing retirement lives in a dedicated later block, and so
   // does 10b's plugin-declared capability backfill — which legitimately names
@@ -1281,7 +1291,7 @@ test('prompt template canonical routes replace the legacy file-index surface', (
   assert.ok(setupSource.includes('createPromptTemplateSetWithEntries'))
   assert.ok(setupSource.includes("markOnboardingSection(client, 'templates', 'complete'"))
   assert.equal(setupSource.includes('INSERT INTO prompt_template_entries(set_id'), false)
-  const migrateSource = readFileSync(join(here, '../../../packages/database/src/migrate.ts'), 'utf8')
+  const migrateSource = migrationSource(here)
   assert.ok(migrateSource.includes('prompt_template_sets_single_active_idx'))
   assert.ok(migrateSource.includes('WHERE is_active'))
   const repoSource = readFileSync(join(here, '../../../packages/database/src/repositories/prompt-templates.ts'), 'utf8')

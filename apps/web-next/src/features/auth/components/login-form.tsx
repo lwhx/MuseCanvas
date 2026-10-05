@@ -8,6 +8,7 @@ import { ArrowLeft, Mail } from 'lucide-react'
 import { api } from '@/shared/services/api'
 import { useAuthUiStore } from '@/shared/stores/auth-ui-store'
 import type { User } from '@/shared/types'
+import { safeRedirectPath } from '@/shared/lib/app-routes'
 import {
   Button,
   FieldGroup,
@@ -39,7 +40,7 @@ const OTP_SEND_FAILED = '验证码发送失败。请确认邮箱地址填写无�
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const from = searchParams.get('from') || '/generate'
+  const from = safeRedirectPath(searchParams.get('from'))
 
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')

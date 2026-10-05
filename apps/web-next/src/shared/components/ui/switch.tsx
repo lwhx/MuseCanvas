@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/shared/lib/cn'
+import { controlSquare } from './size'
 
 interface SwitchProps {
   checked: boolean
@@ -71,17 +72,17 @@ export function Switch({ checked, onCheckedChange, disabled = false, ...aria }: 
       aria-label={name}
       className={cn(
         TRACK_CLASS,
-        'transition-[background-color,border-color] motion-press',
+        'motion-press',
         checked ? 'border-primary bg-primary' : 'border-border-control bg-tonal',
         pending && 'cursor-wait',
         disabled && 'is-disabled',
       )}
-      style={{ transitionDuration: 'var(--motion-base)', transitionTimingFunction: 'var(--ease-standard)' }}
     >
       <span
         aria-hidden="true"
         className={cn(
-          'flex h-[var(--control-xs)] w-[var(--control-xs)] items-center justify-center rounded-pill border',
+          'flex items-center justify-center rounded-pill border',
+          controlSquare.xs,
           'motion-hover-fade',
           checked ? 'translate-x-6 border-transparent bg-on-primary' : 'border-border-control bg-surface',
         )}

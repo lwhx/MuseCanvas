@@ -1,7 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  useState } from 'react'
+import { useQuery,
+  useMutation,
+  useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type {
@@ -9,23 +12,27 @@ import type {
   BuiltinProviderTemplate,
   ModelPreset,
   ProviderCredential,
-} from '@/shared/types'
+  } from '@/shared/types'
 import {
   credentialsForPreset,
   isCustomCredential,
   isPluginBoundCredential,
   presetPluginKey,
   templateConfiguredCount,
-} from '../lib/provider-templates'
+  } from '../lib/provider-templates'
 import { AdminCredentialTable } from './admin-credential-table'
 import { AdminProviderCredentialDialog } from './admin-provider-credential-dialog'
 import { AdminInstalledPlugins } from './admin-installed-plugins'
-import { Blocks, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Blocks,
+  Plus,
+  RefreshCw,
+  Trash2 } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
   Card,
+  DataTable,
   Dialog,
   EmptyState,
   FieldGroup,
@@ -33,18 +40,25 @@ import {
   IconButton,
   Input,
   PageHeader,
+  SectionHeader,
   Select,
   SkeletonText,
   SkeletonTile,
   Switch,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeadCell,
+  TableRow,
+  TableSkeletonRow,
+  TableStateRow,
+  iconSize,
 } from '@/shared/components/ui'
 
 const MEDIA_KIND_LABEL: Record<'image' | 'video', string> = {
   image: '图像',
   video: '视频',
 }
-
-const MODEL_COLUMN_COUNT = 7
 
 export function AdminMediaModelsView() {
   const queryClient = useQueryClient()
@@ -234,140 +248,123 @@ export function AdminMediaModelsView() {
         </Alert>
       )}
 
-      <Card density="compact" className="gap-0 overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">图像与视频模型列表</caption>
-            <thead className="bg-tonal text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">模型名称</th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">类型</th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">绑定插件</th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">关联凭据</th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-medium">并发上限</th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">状态</th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border" aria-busy={modelsLoading || undefined}>
-              {modelsLoading ? (
-                Array.from({ length: 3 }, (_, index) => (
-                  <tr key={index}>
-                    <td className="px-4 py-3"><div className="flex flex-col gap-1"><SkeletonText width="9rem" /><SkeletonText width="6rem" /></div></td>
-                    <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-12 rounded-pill" /></td>
-                    <td className="px-4 py-3"><SkeletonText width="8rem" /></td>
-                    <td className="px-4 py-3"><SkeletonText width="8rem" /></td>
-                    <td className="px-4 py-3 text-right"><SkeletonText width="3rem" /></td>
-                    <td className="px-4 py-3"><div className="flex items-center gap-2"><SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" /><SkeletonText width="3rem" /></div></td>
-                    <td className="px-4 py-3 text-right"><SkeletonTile className="aspect-auto h-8 w-8 rounded-control" /></td>
-                  </tr>
-                ))
-              ) : modelsError ? (
-                <tr>
-                  <td colSpan={MODEL_COLUMN_COUNT}>
-                    <EmptyState
-                      variant="error"
-                      density="compact"
-                      objectName="媒体模型"
-                      title="无法加载媒体模型"
-                      description={`${modelsQueryError?.message || '加载模型列表时出现问题'}。请检查后端服务状态后重试。`}
-                      action={<Button variant="secondary" onClick={() => refetchModels()}>刷新重试</Button>}
+      <DataTable caption="图像与视频模型列表" columns={7}>
+        <TableHead>
+          <TableHeadCell>模型名称</TableHeadCell>
+          <TableHeadCell>类型</TableHeadCell>
+          <TableHeadCell>绑定插件</TableHeadCell>
+          <TableHeadCell>关联凭据</TableHeadCell>
+          <TableHeadCell align="right">并发上限</TableHeadCell>
+          <TableHeadCell>状态</TableHeadCell>
+          <TableHeadCell align="right">操作</TableHeadCell>
+        </TableHead>
+        <TableBody busy={modelsLoading}>
+          {modelsLoading ? (
+            Array.from({ length: 3 }, (_, index) => (
+              <TableSkeletonRow
+                key={index}
+                cells={[
+                  <div key="name" className="flex flex-col gap-1"><SkeletonText width="9rem" /><SkeletonText width="6rem" /></div>,
+                  <SkeletonTile key="kind" className="aspect-auto h-6 w-12 rounded-pill" />,
+                  <SkeletonText key="plugin" width="8rem" />,
+                  <SkeletonText key="credential" width="8rem" />,
+                  { align: 'right', content: <SkeletonText width="3rem" /> },
+                  <div key="status" className="flex items-center gap-2"><SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" /><SkeletonText width="3rem" /></div>,
+                  { align: 'right', content: <SkeletonTile className="aspect-auto h-8 w-8 rounded-control" /> },
+                ]}
+              />
+            ))
+          ) : modelsError ? (
+            <TableStateRow>
+              <EmptyState
+                variant="error"
+                density="compact"
+                objectName="媒体模型"
+                title="无法加载媒体模型"
+                description={`${modelsQueryError?.message || '加载模型列表时出现问题'}。请检查后端服务状态后重试。`}
+                action={<Button variant="secondary" onClick={() => refetchModels()}>刷新重试</Button>}
+              />
+            </TableStateRow>
+          ) : models.length > 0 ? (
+            models.map((m) => (
+              <TableRow key={m.id}>
+                <TableCell tone="strong">
+                  <div>{m.displayName}</div>
+                  <div className="font-mono text-xs font-normal text-muted-foreground">
+                    {m.vendorModelId || m.name || '-'}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge tone="neutral">{MEDIA_KIND_LABEL[mediaKind(m)]}</Badge>
+                </TableCell>
+                <TableCell mono textSize="xs" tone="muted">
+                  {m.pluginId && m.pluginVersion ? `${m.pluginId}@${m.pluginVersion}` : '-'}
+                </TableCell>
+                <TableCell>
+                  {m.providerCredentialName ? (
+                    <span>{m.providerCredentialName}</span>
+                  ) : (
+                    <Badge tone="danger">未关联凭据</Badge>
+                  )}
+                </TableCell>
+                <TableCell align="right" mono tabular>{m.concurrencyLimit}</TableCell>
+                {/* Immediate setting: the Switch reverts itself when the PATCH rejects,
+                    and the banner above states the reason. */}
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={m.enabled}
+                      onCheckedChange={(enabled) => toggleMutation.mutateAsync({ id: m.id, enabled })}
+                      aria-label={`模型 ${m.displayName} 启用状态`}
                     />
-                  </td>
-                </tr>
-              ) : models.length > 0 ? (
-                models.map((m) => (
-                  <tr
-                    key={m.id}
-                    className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
-                  >
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      <div>{m.displayName}</div>
-                      <div className="font-mono text-xs font-normal text-muted-foreground">
-                        {m.vendorModelId || m.name || '-'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone="neutral">{MEDIA_KIND_LABEL[mediaKind(m)]}</Badge>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {m.pluginId && m.pluginVersion ? `${m.pluginId}@${m.pluginVersion}` : '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {m.providerCredentialName ? (
-                        <span>{m.providerCredentialName}</span>
-                      ) : (
-                        <Badge tone="danger">未关联凭据</Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">{m.concurrencyLimit}</td>
-                    {/* Immediate setting: the Switch reverts itself when the PATCH rejects,
-                        and the banner above states the reason. */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={m.enabled}
-                          onCheckedChange={(enabled) => toggleMutation.mutateAsync({ id: m.id, enabled })}
-                          aria-label={`模型 ${m.displayName} 启用状态`}
-                        />
-                        <span className="text-xs text-muted-foreground">{m.enabled ? '已启用' : '已停用'}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <IconButton
-                        variant="danger-ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`确认删除模型 ${m.displayName}？`)) {
-                            deleteMutation.mutate(m.id)
-                          }
-                        }}
-                        aria-label={`删除模型 ${m.displayName}`}
-                        icon={<Trash2 aria-hidden="true" />}
-                      />
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={MODEL_COLUMN_COUNT}>
-                    <EmptyState
-                      variant="first-use"
-                      density="compact"
-                      objectName="媒体模型"
-                      title="还没有配置媒体模型"
-                      description="在这里你可以创建、编辑和管理图像与视频模型。点击右上角「创建模型」开始。"
-                      action={
-                        <Button
-                          onClick={() => {
-                            setActionError('')
-                            setCreateModalOpen(true)
-                          }}
-                        >
-                          创建第一个模型
-                        </Button>
+                    <span className="text-xs text-muted-foreground">{m.enabled ? '已启用' : '已停用'}</span>
+                  </div>
+                </TableCell>
+                <TableCell align="right">
+                  <IconButton
+                    variant="danger-ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm(`确认删除模型 ${m.displayName}？`)) {
+                        deleteMutation.mutate(m.id)
                       }
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    }}
+                    aria-label={`删除模型 ${m.displayName}`}
+                    icon={<Trash2 aria-hidden="true" />}
+                  />
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableStateRow>
+              <EmptyState
+                variant="first-use"
+                density="compact"
+                objectName="媒体模型"
+                title="还没有配置媒体模型"
+                description="在这里你可以创建、编辑和管理图像与视频模型。点击右上角「创建模型」开始。"
+                action={
+                  <Button
+                    onClick={() => {
+                      setActionError('')
+                      setCreateModalOpen(true)
+                    }}
+                  >
+                    创建第一个模型
+                  </Button>
+                }
+              />
+            </TableStateRow>
+          )}
+        </TableBody>
+      </DataTable>
 
       <section className="flex flex-col gap-4" aria-labelledby="plugin-directory-heading">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1 text-foreground">
-            <h2 id="plugin-directory-heading" className="text-module">
-              供应商插件目录
-            </h2>
-            <p className="max-w-reading text-sm text-muted-foreground">
-              由 provider registry 提供的内置图像 / 视频插件。凭据属于供应商账号：从卡片「创建凭据」时按该插件声明的
-              格式与端点校验，同一账号下的其它插件也可以使用。
-            </p>
-          </div>
-        </div>
+        <SectionHeader
+          id="plugin-directory-heading"
+          title="供应商插件目录"
+          description="由 provider registry 提供的内置图像 / 视频插件。凭据属于供应商账号：从卡片「创建凭据」时按该插件声明的格式与端点校验，同一账号下的其它插件也可以使用。"
+        />
 
         {templatesLoading ? (
           <div className="grid gap-4 lg:grid-cols-2" role="status" aria-busy="true">
@@ -420,7 +417,7 @@ export function AdminMediaModelsView() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <Blocks aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0 text-muted-foreground" />
+                        <Blocks aria-hidden="true" className={`${iconSize.sm} shrink-0 text-muted-foreground`} />
                         <h3 className="truncate text-sm font-medium">{t.displayName}</h3>
                       </div>
                       <p className="mt-1 font-mono text-xs text-muted-foreground">
@@ -489,23 +486,20 @@ export function AdminMediaModelsView() {
       <AdminInstalledPlugins kind="media" />
 
       <section className="flex flex-col gap-4" aria-labelledby="media-credentials-heading">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1 text-foreground">
-            <h2 id="media-credentials-heading" className="text-module">
-              媒体凭据
-            </h2>
-            <p className="max-w-reading text-sm text-muted-foreground">
-              从插件模板创建的图像 / 视频凭据。语言模型与自定义凭据在「语言模型」页配置。
-            </p>
-          </div>
-          <Button
-            variant="secondary"
-            onClick={() => openCreateDialog(null)}
-            icon={<Plus aria-hidden="true" />}
-          >
-            创建凭据
-          </Button>
-        </div>
+        <SectionHeader
+          id="media-credentials-heading"
+          title="媒体凭据"
+          description="从插件模板创建的图像 / 视频凭据。语言模型与自定义凭据在「语言模型」页配置。"
+          actions={
+            <Button
+              variant="secondary"
+              onClick={() => openCreateDialog(null)}
+              icon={<Plus aria-hidden="true" />}
+            >
+              创建凭据
+            </Button>
+          }
+        />
 
         <AdminCredentialTable
           credentials={mediaCredentials}

@@ -18,7 +18,7 @@ interface SkeletonProps {
 }
 
 export function Skeleton({ className = '' }: SkeletonProps) {
-  return <span aria-hidden="true" className={cn('motion-shimmer block rounded-checkbox', className)} />
+  return <span aria-hidden="true" className={cn('motion-shimmer block rounded-control', className)} />
 }
 
 interface SkeletonTextProps {
@@ -39,7 +39,7 @@ export function SkeletonText({ lines = 1, width = '100%', className }: SkeletonT
       {Array.from({ length: total }, (_, index) => (
         <span
           key={index}
-          className={cn('motion-shimmer block rounded-checkbox', index === total - 1 && total > 1 && 'w-3/4')}
+          className={cn('motion-shimmer block rounded-pill', index === total - 1 && total > 1 && 'w-3/4')}
           style={{ height: '1.4em' }}
         />
       ))}
@@ -79,7 +79,7 @@ export function SkeletonRow({ cells = 1, cellWidth, className }: SkeletonRowProp
   return (
     <span aria-hidden="true" className={cn('flex min-h-[var(--control-md)] items-center gap-3', className)}>
       {Array.from({ length: total }, (_, index) => (
-        <span key={index} style={style} className="motion-shimmer block h-4 min-w-0 flex-1 rounded-checkbox" />
+        <span key={index} style={style} className="motion-shimmer block h-4 min-w-0 flex-1 rounded-pill" />
       ))}
     </span>
   )

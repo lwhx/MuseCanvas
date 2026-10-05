@@ -58,7 +58,7 @@ export function LegalShell({ title, updatedAt, current = 'terms', sections = [],
                       <a
                         key={sec.id}
                         href={`#${sec.id}`}
-                        className="rounded-control px-2 py-1.5 text-sm text-muted-foreground transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-tonal hover:text-foreground truncate"
+                        className="rounded-control px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-tonal-hover hover:text-foreground truncate"
                         title={sec.title}
                       >
                         {sec.title}

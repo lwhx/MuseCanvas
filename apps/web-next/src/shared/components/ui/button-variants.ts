@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority'
+import { iconSlot } from './size'
 
 export type ButtonVariant = NonNullable<VariantProps<typeof buttonCva>['variant']>
 export type ButtonSize = NonNullable<VariantProps<typeof buttonCva>['size']>
@@ -25,7 +26,7 @@ const buttonCva = cva(
   [
     'relative inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap',
     'rounded-control text-sm font-medium',
-    '[&>svg]:h-[var(--icon-sm)] [&>svg]:w-[var(--icon-sm)] [&>svg]:shrink-0',
+    `${iconSlot.sm} [&>svg]:shrink-0`,
     'transition-[background-color,border-color,color,box-shadow,transform]',
     'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
     'active:scale-[0.98] active:duration-[var(--motion-press)] active:ease-[var(--ease-in)]',
@@ -43,7 +44,7 @@ const buttonCva = cva(
       size: {
         sm: 'min-h-[var(--control-sm)] gap-2 px-3',
         md: 'min-h-[var(--control-md)] gap-2 px-4',
-        lg: 'min-h-[var(--control-lg)] gap-2 px-5 [&>svg]:h-[var(--icon-md)] [&>svg]:w-[var(--icon-md)]',
+        lg: `min-h-[var(--control-lg)] gap-2 px-5 ${iconSlot.md}`,
       },
       state: {
         idle: '',

@@ -1,8 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import {
+  useEffect,
+  useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter,
+  useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
@@ -11,7 +14,7 @@ import type {
   OnboardingSectionKey,
   OnboardingSectionState,
   SetupStatusResponse,
-} from '@/shared/types'
+  } from '@/shared/types'
 import {
   Alert,
   Badge,
@@ -26,6 +29,7 @@ import {
   SkeletonText,
   Stepper,
   buttonVariants,
+  iconSize,
 } from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
 import { Check, ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react'
@@ -222,7 +226,7 @@ function ManualList({ items }: { items: string[] }) {
     <ul className="flex flex-col gap-2">
       {items.map((item) => (
         <li key={item} className="flex items-start gap-2 text-sm text-foreground">
-          <CircleAlert aria-hidden="true" className="mt-1 h-[var(--icon-xs)] w-[var(--icon-xs)] shrink-0 text-muted-foreground" />
+          <CircleAlert aria-hidden="true" className={`mt-1 ${iconSize.xs} shrink-0 text-muted-foreground`} />
           <span>{item}</span>
         </li>
       ))}
@@ -405,7 +409,7 @@ export function SetupWizard() {
                 variant="secondary"
                 onClick={() => navigateToStep(currentStepIndex - 1)}
                 disabled={currentStepIndex === 0}
-                icon={<ChevronLeft aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+                icon={<ChevronLeft aria-hidden="true" className={iconSize.sm} />}
               >
                 上一步
               </Button>
@@ -416,7 +420,7 @@ export function SetupWizard() {
                   icon={
                     <ChevronRight
                       aria-hidden="true"
-                      className={cn('h-[var(--icon-sm)] w-[var(--icon-sm)] order-2')}
+                      className={cn(`${iconSize.sm} order-2`)}
                     />
                   }
                 >

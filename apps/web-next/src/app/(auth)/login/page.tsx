@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { serverApi } from '@/shared/services/server-api'
 import { LoginForm } from '@/features/auth/components/login-form'
 import { ServiceUnavailable } from '@/shared/components/service-unavailable'
+import { safeRedirectPath } from '@/shared/lib/app-routes'
 import { Skeleton, SkeletonText } from '@/shared/components/ui/skeleton'
 import { Suspense } from 'react'
 
@@ -51,7 +52,7 @@ export default async function LoginPage({
   // backend must not render a form whose submit is guaranteed to fail.
   const sessionRes = await serverApi.getMe()
   if (sessionRes.success && sessionRes.data?.user) {
-    redirect(from || '/generate')
+    redirect(safeRedirectPath(from))
   }
   if (sessionRes.error?.code === 'UPSTREAM_UNAVAILABLE') {
     return <ServiceUnavailable />

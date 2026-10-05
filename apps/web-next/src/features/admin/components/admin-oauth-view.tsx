@@ -1,8 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { API_ENDPOINTS, type OAuthProviderName } from '@musecanvas/contracts'
+import {
+  useState } from 'react'
+import { useQuery,
+  useMutation,
+  useQueryClient } from '@tanstack/react-query'
+import { API_ENDPOINTS,
+  type OAuthProviderName } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { AdminOAuthProvider } from '@/shared/types'
 import {
@@ -15,6 +19,7 @@ import {
   SkeletonText,
   SkeletonTile,
   Switch,
+  iconSize,
 } from '@/shared/components/ui'
 import { RefreshCw } from 'lucide-react'
 
@@ -85,7 +90,7 @@ export function AdminOAuthView() {
             variant="secondary"
             onClick={() => void refetch()}
             loading={isFetching}
-            icon={<RefreshCw aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+            icon={<RefreshCw aria-hidden="true" className={iconSize.sm} />}
           >
             刷新
           </Button>

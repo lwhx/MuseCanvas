@@ -7,6 +7,7 @@ import { useDialog } from '@/shared/hooks/useDialog'
 import type { DialogInitialFocus } from '@/shared/hooks/useDialog'
 import { cn } from '@/shared/lib/cn'
 import type { ReactNode } from 'react'
+import { controlSquare, iconSize } from './size'
 
 /** `--container-dialog-*` (420 / 720px). `default` keeps the historic `max-w-sm`
  *  so every panel already in the app renders at the width it did before. */
@@ -108,6 +109,7 @@ export function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
           'relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-panel bg-surface shadow-modal',
+          closing ? 'motion-dialog-out pointer-events-none' : 'motion-dialog-in',
           SIZE_CLASS[size],
           panelClassName,
         )}
@@ -128,10 +130,13 @@ export function Dialog({
             ref={closeButtonRef}
             onClick={onClose}
             aria-label={closeLabel}
-            className="-mr-2 inline-flex h-[var(--control-sm)] w-[var(--control-sm)] shrink-0 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-tonal hover:text-foreground motion-press"
-            style={{ transitionDuration: 'var(--motion-fast)', transitionTimingFunction: 'var(--ease-standard)' }}
+            className={cn(
+              '-mr-2 inline-flex shrink-0 items-center justify-center rounded-control',
+              controlSquare.sm,
+              'text-muted-foreground hover:bg-tonal-hover hover:text-foreground active:bg-tonal-active motion-press',
+            )}
           >
-            <X className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
+            <X className={iconSize.sm} aria-hidden="true" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>

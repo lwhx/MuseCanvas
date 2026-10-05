@@ -1,17 +1,32 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { LogOut, Menu, Settings, X } from 'lucide-react'
-import type { GenerateModeTab, User } from '@/shared/types'
+import { usePathname,
+  useRouter } from 'next/navigation'
+import { LogOut,
+  Menu,
+  Settings,
+  X } from 'lucide-react'
+import type { GenerateModeTab,
+  User } from '@/shared/types'
 import { useLogout } from '@/shared/hooks/useAuth'
 import { useDialog } from '@/shared/hooks/useDialog'
 import { useGenerationMode } from '@/shared/hooks/useGenerationMode'
 import { GENERATE_ROUTE } from '@/shared/lib/app-routes'
 import { cn } from '@/shared/lib/cn'
-import { Avatar, DropdownMenu, IconButton, ThemeToggle, buttonVariants } from '@/shared/components/ui'
+import { Avatar,
+  DropdownMenu,
+  IconButton,
+  ThemeToggle,
+  buttonVariants,
+  controlSquare,
+  iconSize,
+} from '@/shared/components/ui'
 import { ACCOUNT_ROUTE, ADMIN_ROUTE, navLabelFor, resolveActiveNavKey, workspaceNavItems } from '../lib/workspace-nav'
 
 interface WorkspaceHeaderProps {
@@ -36,8 +51,8 @@ const SCRIM_BACKGROUND = 'color-mix(in srgb, var(--color-overlay) calc(var(--opa
 const navItemClass = (isActive: boolean) =>
   cn(
     'relative flex min-h-[var(--control-md)] items-center gap-2 rounded-control px-3 text-sm font-medium',
-    'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
-    isActive ? 'bg-tonal-selected text-foreground' : 'text-muted-foreground hover:bg-tonal hover:text-foreground',
+    'transition-colors',
+    isActive ? 'bg-tonal-selected text-foreground' : 'text-muted-foreground hover:bg-tonal-hover hover:text-foreground active:bg-tonal-active',
   )
 
 /** `orientation` follows the nav: the desktop bar underlines, the drawer rules on the left. */
@@ -147,7 +162,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                   className={navItemClass(isActive)}
                 >
                   {isActive ? <span aria-hidden="true" className={activeBarClass(true)} /> : null}
-                  <Icon className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
+                  <Icon className={iconSize.sm} aria-hidden="true" />
                   {item.label}
                 </button>
               )
@@ -177,7 +192,8 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
               triggerLabel={`账户菜单：${initialUser.email || '当前用户'}`}
               trigger={<Avatar size="md" initial={userInitial} surface="transparent" />}
               triggerClassName={cn(
-                'h-[var(--control-md)] w-[var(--control-md)] text-sm font-medium text-foreground',
+                controlSquare.md,
+                'text-sm font-medium text-foreground',
                 menuOpen ? 'bg-tonal-selected' : 'bg-tonal hover:bg-tonal-hover active:bg-tonal-active',
               )}
               menuLabel="账户菜单"
@@ -206,7 +222,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                 setMenuOpen(false)
                 setDrawerOpen(true)
               }}
-              icon={<Menu className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+              icon={<Menu className={iconSize.md} aria-hidden="true" />}
             />
           </div>
         </div>
@@ -244,7 +260,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                 variant="ghost"
                 aria-label="关闭导航菜单"
                 onClick={closeDrawer}
-                icon={<X className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+                icon={<X className={iconSize.md} aria-hidden="true" />}
               />
             </div>
 
@@ -275,7 +291,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                     className={cn(navItemClass(isActive), 'w-full text-left')}
                   >
                     {isActive ? <span aria-hidden="true" className={activeBarClass(false)} /> : null}
-                    <Icon className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
+                    <Icon className={iconSize.sm} aria-hidden="true" />
                     {item.label}
                   </button>
                 )

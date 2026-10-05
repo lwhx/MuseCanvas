@@ -23,6 +23,7 @@ import {
   Menu,
   X,
 } from 'lucide-react'
+import { iconSize } from '@/shared/components/ui'
 
 interface AdminShellProps {
   user: User
@@ -207,7 +208,6 @@ export function AdminShell({ user, children }: AdminShellProps) {
                   className={cn(
                     'relative flex min-h-[var(--control-md)] items-center gap-3 rounded-control',
                     'px-3 text-sm font-medium transition-colors',
-                    'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
                     active
                       ? 'bg-tonal-selected text-foreground'
                       : 'text-muted-foreground hover:bg-tonal-hover hover:text-foreground',
@@ -220,7 +220,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
                       className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-primary"
                     />
                   ) : null}
-                  <Icon className="h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0" aria-hidden="true" />
+                  <Icon className={`${iconSize.sm} shrink-0`} aria-hidden="true" />
                   <span className="truncate">{item.label}</span>
                 </Link>
               )
@@ -242,14 +242,14 @@ export function AdminShell({ user, children }: AdminShellProps) {
             onClick={() => setDrawerOpen(true)}
             aria-label="打开管理导航"
             className="md:hidden"
-            icon={<Menu className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+            icon={<Menu className={iconSize.md} aria-hidden="true" />}
           />
 
           <Link
             href="/generate"
             className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'shrink-0')}
           >
-            <ChevronRight className="h-[var(--icon-sm)] w-[var(--icon-sm)] rotate-180" aria-hidden="true" />
+            <ChevronRight className={`${iconSize.sm} rotate-180`} aria-hidden="true" />
             返回创作端
           </Link>
 
@@ -317,7 +317,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
                 size="sm"
                 onClick={closeDrawer}
                 aria-label="关闭导航"
-                icon={<X className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+                icon={<X className={iconSize.md} aria-hidden="true" />}
               />
             </div>
 

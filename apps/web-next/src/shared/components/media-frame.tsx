@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ImageOff, Play, VolumeX } from 'lucide-react'
 import type { MediaKind } from '@/shared/types'
+import { iconSize } from '@/shared/components/ui'
 
 export type MediaFrameLayout = 'tile' | 'stage' | 'thumb'
 
@@ -259,7 +260,7 @@ export function MediaFrame({
         // the full muted foreground (5.8:1 on white), not a 50% wash — a 3:1 graphic
         // has to survive as the only clue that this cell is broken.
         <span className="absolute inset-0 flex items-center justify-center bg-tonal">
-          <ImageOff aria-hidden="true" className="h-[var(--icon-lg)] w-[var(--icon-lg)] text-muted-foreground" />
+          <ImageOff aria-hidden="true" className={`${iconSize.lg} text-muted-foreground`} />
           <span className="sr-only">预览加载失败</span>
         </span>
       ) : null}

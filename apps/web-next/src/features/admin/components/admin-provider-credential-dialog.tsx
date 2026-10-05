@@ -197,7 +197,7 @@ export function AdminProviderCredentialDialog({
               {MODE_OPTIONS.map((option) => (
                 <label
                   key={option.value}
-                  className="flex min-h-[var(--control-md)] flex-1 cursor-pointer items-start gap-2 rounded-control px-3 py-1.5 text-sm text-foreground transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-tonal-hover"
+                  className="flex min-h-[var(--control-md)] flex-1 cursor-pointer items-start gap-2 rounded-control px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-tonal-hover"
                 >
                   <input
                     type="radio"

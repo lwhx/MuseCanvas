@@ -1,13 +1,14 @@
 import { Loader2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/shared/lib/cn'
+import { iconSize } from './size'
 
 /** Icon sizes from `--icon-*` (icons.md §3): the spinner never invents a size. */
 const sizeClass = {
-  xs: 'h-[var(--icon-xs)] w-[var(--icon-xs)]',
-  sm: 'h-[var(--icon-sm)] w-[var(--icon-sm)]',
-  md: 'h-[var(--icon-md)] w-[var(--icon-md)]',
-  lg: 'h-[var(--icon-lg)] w-[var(--icon-lg)]',
+  xs: iconSize.xs,
+  sm: iconSize.sm,
+  md: iconSize.md,
+  lg: iconSize.lg,
 } as const
 
 export interface SpinnerProps {

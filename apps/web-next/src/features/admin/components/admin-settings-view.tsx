@@ -1,7 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useState } from 'react'
+import { useMutation,
+  useQuery,
+  useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type {
@@ -19,7 +22,7 @@ import type {
   StorageConnectionStatus,
   StorageSettingsDto,
   StorageSettingsInput,
-} from '@/shared/types'
+  } from '@/shared/types'
 import {
   Alert,
   Badge,
@@ -38,6 +41,7 @@ import {
   SkeletonText,
   SkeletonTile,
   Tabs,
+  iconSize,
 } from '@/shared/components/ui'
 import type { BadgeTone } from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
@@ -779,7 +783,7 @@ export function AdminSettingsView() {
             variant="secondary"
             onClick={() => void refetch()}
             loading={isFetching}
-            icon={<RefreshCw aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+            icon={<RefreshCw aria-hidden="true" className={iconSize.sm} />}
           >
             刷新
           </Button>
@@ -843,7 +847,6 @@ export function AdminSettingsView() {
                         className={cn(
                           'relative flex min-h-[var(--control-md)] items-center gap-3 rounded-control px-3',
                           'text-left text-sm font-medium transition-colors',
-                          'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
                           current
                             ? 'bg-tonal-selected text-foreground'
                             : 'text-muted-foreground hover:bg-tonal-hover hover:text-foreground',
@@ -855,7 +858,7 @@ export function AdminSettingsView() {
                             className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-primary"
                           />
                         ) : null}
-                        <ItemIcon className="h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0" aria-hidden="true" />
+                        <ItemIcon className={`${iconSize.sm} shrink-0`} aria-hidden="true" />
                         <span className="truncate">{item.label}</span>
                       </button>
                     )

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn'
+import { iconSlot } from './size'
 
 export interface SegmentedControlItem<T extends string = string> {
   /** Wire value — the string that leaves this component and comes back as `value`. */
@@ -36,8 +37,8 @@ const RADIO_SIZE = {
 const RADIO_BASE = [
   'relative inline-flex shrink-0 select-none items-center justify-center gap-1 whitespace-nowrap',
   'rounded-control font-medium',
-  '[&>svg]:h-[var(--icon-sm)] [&>svg]:w-[var(--icon-sm)] [&>svg]:shrink-0',
-  'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+  `${iconSlot.sm} [&>svg]:shrink-0`,
+  'transition-colors',
 ].join(' ')
 
 /**

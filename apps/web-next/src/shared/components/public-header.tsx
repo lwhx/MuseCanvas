@@ -46,7 +46,7 @@ export function PublicHeader({ current = 'landing', className }: PublicHeaderPro
               <Link
                 href="/terms"
                 className={cn(
-                  'rounded-control px-2.5 py-1 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+                  'rounded-control px-2.5 py-1 transition-colors',
                   current === 'terms'
                     ? 'font-medium text-foreground bg-tonal'
                     : 'text-muted-foreground hover:bg-tonal-hover hover:text-foreground',
@@ -57,7 +57,7 @@ export function PublicHeader({ current = 'landing', className }: PublicHeaderPro
               <Link
                 href="/privacy"
                 className={cn(
-                  'rounded-control px-2.5 py-1 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+                  'rounded-control px-2.5 py-1 transition-colors',
                   current === 'privacy'
                     ? 'font-medium text-foreground bg-tonal'
                     : 'text-muted-foreground hover:bg-tonal-hover hover:text-foreground',

@@ -1,7 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useEffect,
+  useRef,
+  useState } from 'react'
+import { useMutation,
+  useQuery,
+  useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type {
@@ -10,11 +15,18 @@ import type {
   AdminPluginDto,
   InstalledPluginStatus,
   PluginKind,
-} from '@/shared/types'
-import { humanFileSize, resolveApiUrl, shortDigest } from '../lib/plugin-upload'
+  } from '@/shared/types'
+import { humanFileSize,
+  resolveApiUrl,
+  shortDigest } from '../lib/plugin-upload'
 import { AdminPluginUploadDialog } from './admin-plugin-upload-dialog'
 import { PluginFindingList } from './plugin-finding-list'
-import { Blocks, Download, ExternalLink, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { Blocks,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  Trash2,
+  Upload } from 'lucide-react'
 import {
   Alert,
   Badge,
@@ -25,8 +37,16 @@ import {
   IconButton,
   SkeletonText,
   SkeletonTile,
+  SectionHeader,
   Spinner,
+  TableBody,
+  TableCell,
+  TableFrame,
+  TableHead,
+  TableHeadCell,
+  TableRow,
   Switch,
+  iconSize,
 } from '@/shared/components/ui'
 import type { BadgeTone } from '@/shared/components/ui'
 
@@ -87,7 +107,7 @@ function manifestModels(plugin: AdminPluginDto): { id: string; name?: string }[]
 function PluginIcon({ plugin }: { plugin: AdminPluginDto }) {
   const [failed, setFailed] = useState(false)
   if (!plugin.hasIcon || failed) {
-    return <Blocks aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0 text-muted-foreground" />
+    return <Blocks aria-hidden="true" className={`${iconSize.sm} shrink-0 text-muted-foreground`} />
   }
   return (
     <img
@@ -254,31 +274,31 @@ function PluginPackageDetails({ plugin }: { plugin: AdminPluginDto }) {
           <summary className={DISCLOSURE_SUMMARY_CLASS}>
             包内文件（<span className="font-mono tabular-nums">{files.length}</span>）
           </summary>
-          <div className="overflow-x-auto px-3 pb-3">
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">
-                插件包 {plugin.pluginId}@{plugin.pluginVersion} 的文件清单
-              </caption>
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th scope="col" className="py-1 pr-3 font-normal">路径</th>
-                  <th scope="col" className="py-1 pr-3 text-right font-normal">大小</th>
-                  <th scope="col" className="py-1 font-normal">sha256</th>
-                </tr>
-              </thead>
-              <tbody className="font-mono text-foreground">
-                {files.map((f) => (
-                  <tr key={f.path}>
-                    <td className="break-all py-1 pr-3">{f.path}</td>
-                    <td className="whitespace-nowrap py-1 pr-3 text-right tabular-nums">{humanFileSize(f.sizeBytes)}</td>
-                    <td className="whitespace-nowrap py-1" title={f.sha256}>
-                      {shortDigest(f.sha256)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TableFrame
+            caption={`插件包 ${plugin.pluginId}@${plugin.pluginVersion} 的文件清单`}
+            density="dense"
+            columns={3}
+            className="px-3 pb-3"
+          >
+            <TableHead>
+              <TableHeadCell>路径</TableHeadCell>
+              <TableHeadCell align="right">大小</TableHeadCell>
+              {/* Last column: the dense cell box reserves a right gutter that only
+                  exists to separate columns, so the final one opts out of it. */}
+              <TableHeadCell className="pr-0">sha256</TableHeadCell>
+            </TableHead>
+            <TableBody>
+              {files.map((f) => (
+                <TableRow key={f.path} hover={false}>
+                  <TableCell className="break-all">{f.path}</TableCell>
+                  <TableCell align="right" className="whitespace-nowrap tabular-nums">{humanFileSize(f.sizeBytes)}</TableCell>
+                  <TableCell className="whitespace-nowrap pr-0" title={f.sha256}>
+                    {shortDigest(f.sha256)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </TableFrame>
         </details>
       )}
 
@@ -408,14 +428,12 @@ export function AdminInstalledPlugins({ kind }: AdminInstalledPluginsProps) {
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby={`installed-plugins-${kind}-heading`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1 text-foreground">
-          <h2 id={`installed-plugins-${kind}-heading`} className="text-module">
-            {copy.title}
-          </h2>
-          <p className="max-w-reading text-sm text-muted-foreground">{copy.description}</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <SectionHeader
+        id={`installed-plugins-${kind}-heading`}
+        title={copy.title}
+        description={copy.description}
+        actions={
+          <>
           <Button
             onClick={() => {
               setActionError('')
@@ -436,8 +454,9 @@ export function AdminInstalledPlugins({ kind }: AdminInstalledPluginsProps) {
           >
             刷新
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {actionError && (
         <Alert tone="danger" role="alert" title="插件操作未完成">

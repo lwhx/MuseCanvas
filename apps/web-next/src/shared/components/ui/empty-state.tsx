@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/shared/lib/cn'
 import { Button } from './button'
 import type { ButtonVariant } from './button'
+import { iconSize } from './size'
 
 export type EmptyStateVariant = 'first-use' | 'no-results' | 'no-permission' | 'error' | 'capability-unavailable'
 
@@ -128,7 +129,7 @@ export function EmptyState({
       )}
     >
       {/* icons.md §3: 48px is the page-level empty-state size. */}
-      <Icon aria-hidden="true" className={cn('h-[var(--icon-2xl)] w-[var(--icon-2xl)]', preset.iconClass)} />
+      <Icon aria-hidden="true" className={cn(iconSize['2xl'], preset.iconClass)} />
       <div className="flex flex-col gap-1">
         <p className="text-module">{shownTitle}</p>
         <p className="max-w-reading text-sm text-muted-foreground">{shownDescription}</p>

@@ -38,6 +38,11 @@ export type { FormFieldContextValue, FormFieldProps, FieldGroupProps } from './f
 export { Input, Textarea, controlClasses, controlHeight, controlSurface } from './input'
 export type { ControlSize, ControlVariant, InputProps, TextareaProps } from './input'
 
+// Token → utility maps for repeated sizes (icon boxes, square controls). See the
+// module header for why these are maps and not inline arbitrary values.
+export { controlSquare, iconSize, iconSlot } from './size'
+export type { ControlSquareSize, IconSize } from './size'
+
 export { PageHeader } from './page-header'
 export type { PageHeaderProps } from './page-header'
 
@@ -59,11 +64,38 @@ export type { SegmentedControlProps, SegmentedControlItem } from './segmented-co
 export { Spinner } from './spinner'
 export type { SpinnerProps } from './spinner'
 
+export { SectionHeader } from './section-header'
+export type { SectionHeaderProps } from './section-header'
+
 export { Stepper } from './stepper'
 export type { StepperProps, StepperStep } from './stepper'
 
 export { Tabs } from './tabs'
 export type { TabItem, TabsProps } from './tabs'
+
+export {
+  DataTable,
+  TableBody,
+  TableCell,
+  TableFrame,
+  TableHead,
+  TableHeadCell,
+  TableRow,
+  TableSkeletonRow,
+  TableStateRow,
+} from './table'
+export type {
+  DataTableProps,
+  TableBodyProps,
+  TableCellProps,
+  TableFrameProps,
+  TableHeadCellProps,
+  TableHeadProps,
+  TableRowProps,
+  TableSkeletonCell,
+  TableSkeletonRowProps,
+  TableStateRowProps,
+} from './table'
 
 export { FileDropZone, formatFileSize } from './dropzone'
 export type { DropZoneFile, DropZoneFileStatus, FileDropZoneProps } from './dropzone'

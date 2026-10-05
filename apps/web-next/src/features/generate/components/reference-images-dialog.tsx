@@ -1,6 +1,9 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import {
+  useMemo,
+  useRef,
+  useState } from 'react'
 import {
   Check,
   ChevronLeft,
@@ -8,7 +11,7 @@ import {
   ImagePlus,
   Trash2,
   Upload,
-} from 'lucide-react'
+  } from 'lucide-react'
 import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import {
   ALLOWED_IMAGE_MIME_TYPES,
@@ -21,9 +24,17 @@ import {
   removeReferenceImage,
   reorderReferenceImages,
   retryReferenceUpload,
-} from '@/shared/lib/reference-upload'
+  } from '@/shared/lib/reference-upload'
 import { planRolePositions } from '@/shared/lib/generation-params'
-import { Alert, Badge, Button, Dialog, EmptyState, IconButton, Progress } from '@/shared/components/ui'
+import { Alert,
+  Badge,
+  Button,
+  Dialog,
+  EmptyState,
+  IconButton,
+  Progress,
+  iconSize,
+} from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
 import type { ImageInputPlan, ImageInputPlanModel } from '@/shared/lib/generation-params'
 import type { Asset, StagedReferenceImage } from '@/shared/types'
@@ -237,7 +248,7 @@ export function ReferenceImagesDialog({
       >
         {canAdd && (
           <div className="flex flex-col items-center gap-3 px-4 py-5 text-center">
-            <Upload aria-hidden="true" className="h-[var(--icon-xl)] w-[var(--icon-xl)] text-muted-foreground" />
+            <Upload aria-hidden="true" className={`${iconSize.xl} text-muted-foreground`} />
             <p className="text-sm font-medium text-foreground">拖拽图片到此处</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button
@@ -315,7 +326,7 @@ export function ReferenceImagesDialog({
                         aria-hidden="true"
                         className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-pill bg-success text-on-success"
                       >
-                        <Check className="h-[var(--icon-xs)] w-[var(--icon-xs)]" />
+                        <Check className={iconSize.xs} />
                       </span>
                     ) : (
                       // Real upload progress as a determinate bar; 校验中 / 排队中 have

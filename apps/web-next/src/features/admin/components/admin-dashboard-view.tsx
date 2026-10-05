@@ -5,6 +5,7 @@ import { API_ENDPOINTS } from '@musecanvas/contracts'
 import Link from 'next/link'
 import { api } from '@/shared/services/api'
 import type { AdminJob } from '@/shared/types'
+import { formatLocalizedDateTime } from '@/shared/lib/format'
 import { jobStatusMeta } from '@/shared/lib/job-status'
 import { RefreshCw } from 'lucide-react'
 import {
@@ -12,10 +13,18 @@ import {
   Badge,
   Button,
   Card,
+  DataTable,
   EmptyState,
   PageHeader,
   SkeletonText,
   StatCard,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeadCell,
+  TableRow,
+  TableSkeletonRow,
+  TableStateRow,
   buttonVariants,
 } from '@/shared/components/ui'
 
@@ -130,91 +139,72 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
       {/* Recent jobs */}
       <section className="flex flex-col gap-4">
         <h2 className="text-subtitle font-normal text-foreground">最近任务</h2>
-        <Card className="gap-0 overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">最近 {RECENT_JOB_LIMIT} 条生成任务</caption>
-              <thead className="bg-tonal text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-3 text-sm font-medium">
-                    任务 ID
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-sm font-medium">
-                    模型
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-sm font-medium">
-                    状态
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
-                    创建时间
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border" aria-busy={jobsPending || undefined}>
-                {jobsPending ? (
-                  Array.from({ length: 5 }, (_, index) => (
-                    <tr key={index}>
-                      <td className="px-4 py-3"><SkeletonText width="7rem" /></td>
-                      <td className="px-4 py-3"><SkeletonText width="9rem" /></td>
-                      <td className="px-4 py-3"><SkeletonText width="5rem" /></td>
-                      <td className="px-4 py-3 text-right"><SkeletonText width="8rem" className="ml-auto" /></td>
-                    </tr>
-                  ))
-                ) : isJobsError ? (
-                  <tr>
-                    <td colSpan={4}>
-                      <EmptyState
-                        variant="error"
-                        objectName="最近任务"
-                        density="compact"
-                        actionLabel="刷新重试"
-                        onAction={() => refetchJobs()}
-                      />
-                    </td>
-                  </tr>
-                ) : jobs && jobs.length > 0 ? (
-                  jobs.map((job) => {
-                    const status = jobStatusMeta(job.status)
-                    return (
-                      <tr
-                        key={job.id}
-                        className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
-                      >
-                        <td className="px-4 py-3 font-mono text-muted-foreground">{job.id.slice(0, 8)}…</td>
-                        <td className="px-4 py-3 font-medium text-foreground">
-                          {job.modelName || '未知模型'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge className={status.badge}>{status.label}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {new Date(job.createdAt).toLocaleString('zh-CN')}
-                        </td>
-                      </tr>
-                    )
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={4}>
-                      <EmptyState
-                        variant="first-use"
-                        objectName="生成任务"
-                        density="compact"
-                        title="还没有生成任务"
-                        description="用户开始创作后，最近的任务会出现在这里。"
-                        action={
-                          <Link href="/admin/jobs" className={buttonVariants({ variant: 'secondary' })}>
-                            查看全部任务
-                          </Link>
-                        }
-                      />
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <DataTable caption={`最近 ${RECENT_JOB_LIMIT} 条生成任务`} columns={4}>
+          <TableHead>
+            <TableHeadCell>任务 ID</TableHeadCell>
+            <TableHeadCell>模型</TableHeadCell>
+            <TableHeadCell>状态</TableHeadCell>
+            <TableHeadCell align="right">创建时间</TableHeadCell>
+          </TableHead>
+          <TableBody busy={jobsPending}>
+            {jobsPending ? (
+              Array.from({ length: 5 }, (_, index) => (
+                <TableSkeletonRow
+                  key={index}
+                  cells={[
+                    <SkeletonText key="id" width="7rem" />,
+                    <SkeletonText key="model" width="9rem" />,
+                    <SkeletonText key="status" width="5rem" />,
+                    { align: 'right', content: <SkeletonText width="8rem" className="ml-auto" /> },
+                  ]}
+                />
+              ))
+            ) : isJobsError ? (
+              <TableStateRow>
+                <EmptyState
+                  variant="error"
+                  objectName="最近任务"
+                  density="compact"
+                  actionLabel="刷新重试"
+                  onAction={() => refetchJobs()}
+                />
+              </TableStateRow>
+            ) : jobs && jobs.length > 0 ? (
+              jobs.map((job) => {
+                const status = jobStatusMeta(job.status)
+                return (
+                  <TableRow key={job.id}>
+                    <TableCell mono tone="muted">{job.id.slice(0, 8)}…</TableCell>
+                    <TableCell tone="strong">
+                      {job.modelName || '未知模型'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={status.badge}>{status.label}</Badge>
+                    </TableCell>
+                    <TableCell align="right" mono tabular tone="muted">
+                      {formatLocalizedDateTime(job.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            ) : (
+              <TableStateRow>
+                <EmptyState
+                  variant="first-use"
+                  objectName="生成任务"
+                  density="compact"
+                  title="还没有生成任务"
+                  description="用户开始创作后，最近的任务会出现在这里。"
+                  action={
+                    <Link href="/admin/jobs" className={buttonVariants({ variant: 'secondary' })}>
+                      查看全部任务
+                    </Link>
+                  }
+                />
+              </TableStateRow>
+            )}
+          </TableBody>
+        </DataTable>
       </section>
     </div>
   )

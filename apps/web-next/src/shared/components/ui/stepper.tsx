@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { cn } from '@/shared/lib/cn'
+import { controlSquare, iconSize } from './size'
 
 export interface StepperStep {
   id: string
@@ -90,7 +91,7 @@ export function Stepper({
             <span
               className={cn(
                 'relative z-[1] flex shrink-0 items-center justify-center self-start rounded-full font-medium',
-                size === 'sm' ? 'h-[var(--control-xs)] w-[var(--control-xs)] text-xs' : 'h-8 w-8 text-sm',
+                size === 'sm' ? `${controlSquare.xs} text-xs` : `${controlSquare.sm} text-sm`,
                 orientation !== 'vertical' && 'sm:self-center',
                 orientation === 'horizontal' && 'self-center',
                 done && 'bg-primary text-on-primary',
@@ -99,7 +100,7 @@ export function Stepper({
               )}
             >
               {done ? (
-                <Check aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />
+                <Check aria-hidden="true" className={iconSize.sm} />
               ) : (
                 <span aria-hidden="true" className="font-mono tabular-nums">
                   {index + 1}

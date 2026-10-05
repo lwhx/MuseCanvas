@@ -5,6 +5,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import Link from 'next/link'
 import { cn } from '@/shared/lib/cn'
 import { Spinner } from './spinner'
+import { iconSlot } from './size'
 
 export interface DropdownMenuItem {
   id: string
@@ -60,12 +61,12 @@ const EXIT_MS = 160
 const ITEM_BASE = [
   'flex w-full shrink-0 select-none items-center gap-2 whitespace-nowrap rounded-[8px] px-3',
   'text-left text-sm text-foreground',
-  '[&>svg]:h-[var(--icon-sm)] [&>svg]:w-[var(--icon-sm)] [&>svg]:shrink-0',
-  'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+  `${iconSlot.sm} [&>svg]:shrink-0`,
+  'transition-colors',
 ].join(' ')
 
 const ITEM_TONE = {
-  default: 'not-disabled:hover:bg-tonal not-disabled:active:bg-tonal-active',
+  default: 'not-disabled:hover:bg-tonal-hover not-disabled:active:bg-tonal-active',
   danger: 'text-danger not-disabled:hover:bg-danger-soft not-disabled:active:bg-danger-border',
 } as const
 
@@ -312,7 +313,7 @@ export function DropdownMenu({
         aria-controls={mounted ? panelId : undefined}
         className={cn(
           'inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-pill',
-          'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+          'transition-colors',
           triggerClassName,
         )}
       >

@@ -1,8 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from 'react'
 import type { CSSProperties } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname,
+  useRouter,
+  useSearchParams } from 'next/navigation'
 import {
   Download,
   RefreshCw,
@@ -10,7 +17,7 @@ import {
   Trash2,
   X,
   ZoomIn,
-} from 'lucide-react'
+  } from 'lucide-react'
 import {
   Alert,
   Badge,
@@ -25,6 +32,8 @@ import {
   SkeletonTile,
   Tabs,
   useToast,
+  controlSquare,
+  iconSize,
 } from '@/shared/components/ui'
 import type { TabItem } from '@/shared/components/ui'
 import { MediaFrame } from '@/shared/components/media-frame'
@@ -38,6 +47,7 @@ import {
 } from '@/shared/hooks/useLibrary'
 import { assetPlaybackUrl, assetPreviewUrl, isVideoAsset } from '@/shared/types'
 import { GENERATE_ROUTE } from '@/shared/lib/app-routes'
+import { formatDate } from '@/shared/lib/format'
 import { AssetLightbox } from './asset-lightbox'
 
 /** Segmented control values, mirroring `LibraryFilterKind`. Fed to `Tabs`, whose
@@ -67,15 +77,6 @@ function gridClass(columnCount: 2 | 3 | 4 | 6): string {
   if (columnCount === 3) return 'grid-cols-2 sm:grid-cols-3'
   if (columnCount === 6) return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'
   return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
-}
-
-/** `YYYY-MM-DD` (copy.md §9). `shared/lib` has no date formatter to reuse, so the
- *  library keeps this local rather than reaching into another agent's file. */
-function formatDate(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 /**
@@ -141,8 +142,16 @@ export function LibraryView() {
   }, [searchQuery, appliedQuery])
 
   // One keyset page at a time (see GET /api/library). `total` comes from the first
-  // page because it counts the whole predicate, not the window.
-  const queryParams = useMemo(() => ({ limit: 30, q: appliedQuery || undefined }), [appliedQuery])
+  // page because it counts the whole predicate, not the window, so the media kind
+  // must be part of that predicate or "共 N 个作品" keeps counting every kind.
+  const queryParams = useMemo(
+    () => ({
+      limit: 30,
+      q: appliedQuery || undefined,
+      kind: filterKind === 'all' ? undefined : filterKind,
+    }),
+    [appliedQuery, filterKind],
+  )
   const {
     data,
     isLoading,
@@ -160,9 +169,8 @@ export function LibraryView() {
   const deleteMutation = useDeleteAsset()
   const batchDeleteMutation = useBatchDeleteAssets()
 
-  // `kind` is a server-side predicate, but the page keeps filtering the accumulated
-  // tiles locally so switching a filter never refetches what is already on screen.
-  // `hasNextPage` stays the way to reach what the filter has hidden.
+  // The server already filters by kind; the local pass only guards the frame where
+  // the previous query's pages are still shown while the new one is in flight.
   const visibleAssets =
     filterKind === 'all'
       ? assets
@@ -170,10 +178,13 @@ export function LibraryView() {
 
   // Every filter change resets the keyset window, so a depth remembered from the
   // previous query must not be chased into the new one.
+  // The selection is dropped too: a bulk delete must only ever act on tiles the user
+  // can currently see, never on ones a filter has hidden.
   useEffect(() => {
     setTargetPages(0)
     forwardFailedRef.current = false
-  }, [appliedQuery, filterKind])
+    clearSelectedAssets()
+  }, [appliedQuery, filterKind, clearSelectedAssets])
 
   // Escape / arrows / focus restore all live in `useDialog` behind the lightbox.
   // These two callbacks are stable so the dialog never re-binds its window keydown.
@@ -208,20 +219,22 @@ export function LibraryView() {
     const count = selectedAssetIds.length
     try {
       await batchDeleteMutation.mutateAsync(selectedAssetIds)
+      clearSelectedAssets()
       toast.push({ title: `已删除 ${count} 个作品`, variant: 'success' })
     } catch {
-      toast.push({ title: '删除失败', description: '网络或服务端错误，请稍后重试。', variant: 'error' })
+      // Keep the selection so a retry does not mean re-picking every tile.
+      toast.push({ title: '删除失败', description: '网络异常，请稍后重试。', variant: 'error' })
     } finally {
       setBatchDeleteOpen(false)
-      clearSelectedAssets()
     }
   }
 
   function confirmSingleDelete() {
     const assetId = deleteTargetId
-    setDeleteTargetId(null)
     if (!assetId) return
+    // The dialog stays open while the request runs so its loading state is seen.
     deleteMutation.mutate(assetId, {
+      onSettled: () => setDeleteTargetId(null),
       onSuccess: () => toast.push({ title: '作品已删除', variant: 'success' }),
       onError: (err: Error) =>
         toast.push({
@@ -233,16 +246,50 @@ export function LibraryView() {
   }
 
   // Shareable filters (components.md → Search & Filter 模式: 筛选条件反映在 URL 参数可分享).
+  //
+  // Two effects, because `pageCount` is read out of the *current* query result: at
+  // the moment `appliedQuery`/`filterKind` change it still describes the previous
+  // query. One effect covering all three keys would therefore briefly write the old
+  // depth into the new filter's URL (`?q=cat&page=3` for a search with exactly one
+  // page). Filters own `q`/`type`; the depth is re-derived from the data below.
+  //
+  // `page` is dropped here only when the filter genuinely moved away from what the
+  // URL says (the "changed" test), not merely because this effect ran. That keeps a
+  // restored `?page=N` link intact while the depth effect walks it forward, and it
+  // avoids depending on `targetPages` — which is reset mid-flight and would make
+  // this effect fire a spurious, page-destroying write as the walk completed.
   useEffect(() => {
     if (!hydratedRef.current) return
-    const next = new URLSearchParams()
+    const urlQuery = searchParams.get('q') ?? ''
+    const urlKind = searchParams.get('type') ?? 'all'
+    const filterMoved = urlQuery !== appliedQuery || urlKind !== filterKind
+    const next = new URLSearchParams(searchParams.toString())
     if (appliedQuery) next.set('q', appliedQuery)
+    else next.delete('q')
     if (filterKind !== 'all') next.set('type', filterKind)
-    if (pageCount > 1) next.set('page', String(pageCount))
+    else next.delete('type')
+    if (filterMoved) next.delete('page')
     const serialized = next.toString()
     if (serialized === searchParams.toString()) return
     router.replace(serialized ? `${pathname}?${serialized}` : pathname, { scroll: false })
-  }, [appliedQuery, filterKind, pageCount, pathname, router, searchParams])
+    // `searchParams` is read as the merge base only; depending on it would make this
+    // effect re-run on its own navigation and fight the URL it just wrote.
+  }, [appliedQuery, filterKind, pathname, router])
+
+  // Depth is written from the data, and only while it means something: `?page=1` is
+  // the default state, so it is dropped and a shared link carries no redundant
+  // parameter. Held back while a restored link is still walking forward.
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    if (targetPages > 0) return
+    const next = new URLSearchParams(searchParams.toString())
+    if (pageCount > 1) next.set('page', String(pageCount))
+    else next.delete('page')
+    const serialized = next.toString()
+    if (serialized === searchParams.toString()) return
+    router.replace(serialized ? `${pathname}?${serialized}` : pathname, { scroll: false })
+    // See the note above on `searchParams`.
+  }, [pageCount, targetPages, pathname, router])
 
   // `?page=3` is a keyset *depth*, not a number the API can jump to, so a restored
   // link walks forward. A failed hop stops the walk rather than retrying it on every
@@ -363,9 +410,9 @@ export function LibraryView() {
                         target="_blank"
                         rel="noreferrer"
                         aria-label="下载该作品"
-                        className="inline-flex h-[var(--control-sm)] w-[var(--control-sm)] shrink-0 items-center justify-center rounded-control bg-overlay/40 text-foreground-inverse transition-colors duration-[var(--motion-fast)] hover:bg-overlay/60"
+                        className={`inline-flex ${controlSquare.sm} shrink-0 items-center justify-center rounded-control bg-overlay/40 text-foreground-inverse transition-colors hover:bg-overlay/60`}
                       >
-                        <Download aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />
+                        <Download aria-hidden="true" className={iconSize.sm} />
                       </a>
                       <IconButton
                         variant="ghost"
@@ -484,7 +531,7 @@ export function LibraryView() {
             <div className="relative min-w-60 flex-1 md:max-w-form">
               <SearchIcon
                 aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 h-[var(--icon-sm)] w-[var(--icon-sm)] -translate-y-1/2 text-muted-foreground"
+                className={`pointer-events-none absolute left-3 top-1/2 ${iconSize.sm} -translate-y-1/2 text-muted-foreground`}
               />
               <Input
                 type="search"
@@ -526,7 +573,7 @@ export function LibraryView() {
                     size="sm"
                     aria-label="清除关键词筛选"
                     onClick={clearQuery}
-                    className="h-6 min-h-6 w-6"
+                    className={`${controlSquare.xs} min-h-[var(--control-xs)]`}
                     icon={<X aria-hidden="true" />}
                   />
                 </span>
@@ -541,7 +588,7 @@ export function LibraryView() {
                     size="sm"
                     aria-label="清除作品类型筛选"
                     onClick={() => setFilterKind('all')}
-                    className="h-6 min-h-6 w-6"
+                    className={`${controlSquare.xs} min-h-[var(--control-xs)]`}
                     icon={<X aria-hidden="true" />}
                   />
                 </span>

@@ -1,8 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { API_ENDPOINTS, type PromptTemplateSetDetailDto } from '@musecanvas/contracts'
+import {
+  useState } from 'react'
+import { useQuery,
+  useMutation,
+  useQueryClient } from '@tanstack/react-query'
+import { API_ENDPOINTS,
+  type PromptTemplateSetDetailDto } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import { Dialog } from '@/shared/components/ui/dialog'
 import {
@@ -22,6 +26,8 @@ import {
   SkeletonTile,
   Textarea,
   buttonVariants,
+  controlSquare,
+  iconSize,
 } from '@/shared/components/ui'
 import { Download, FileText, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
@@ -107,7 +113,7 @@ export function AdminPromptTemplatesView() {
                 href={`${API_ENDPOINTS.admin.promptTemplatesExport}?setId=${encodeURIComponent(activeSet.id)}`}
                 className={buttonVariants({ variant: 'secondary' })}
               >
-                <Download aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />
+                <Download aria-hidden="true" className={iconSize.sm} />
                 导出模板集
               </a>
             ) : null}
@@ -118,7 +124,7 @@ export function AdminPromptTemplatesView() {
               }}
               disabled={!activeSet}
               title={activeSet ? undefined : '请先导入并激活模板集'}
-              icon={<Plus aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+              icon={<Plus aria-hidden="true" className={iconSize.sm} />}
             >
               创建模板
             </Button>
@@ -126,7 +132,7 @@ export function AdminPromptTemplatesView() {
               variant="secondary"
               onClick={() => void refetch()}
               loading={isFetching}
-              icon={<RefreshCw aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+              icon={<RefreshCw aria-hidden="true" className={iconSize.sm} />}
             >
               刷新
             </Button>
@@ -152,7 +158,7 @@ export function AdminPromptTemplatesView() {
       {!isLoading && !isError && !activeSet ? (
         <Alert tone="info" role="status" title="当前没有激活的模板集">
           <span className="flex items-start gap-2">
-            <FileText aria-hidden="true" className="mt-0.5 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0" />
+            <FileText aria-hidden="true" className={`mt-0.5 ${iconSize.sm} shrink-0`} />
             模板集通过初始化向导（/setup）导入，条目管理在激活集上进行；激活模板集后即可创建模板。
           </span>
         </Alert>
@@ -165,7 +171,7 @@ export function AdminPromptTemplatesView() {
             <Card key={index} aria-hidden="true" density="compact">
               <div className="flex items-start justify-between gap-3">
                 <SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" />
-                <SkeletonTile className="aspect-auto h-[var(--control-sm)] w-[var(--control-sm)] rounded-control" />
+                <SkeletonTile className={`aspect-auto ${controlSquare.sm} rounded-control`} />
               </div>
               <SkeletonText width={index % 2 === 0 ? '11rem' : '9rem'} />
               <SkeletonText lines={3} />
@@ -192,7 +198,7 @@ export function AdminPromptTemplatesView() {
                           deleteMutation.mutate(t.id)
                         }
                       }}
-                      icon={<Trash2 aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+                      icon={<Trash2 aria-hidden="true" className={iconSize.sm} />}
                     />
                   </div>
                   <CardTitle level={3}>{t.name}</CardTitle>

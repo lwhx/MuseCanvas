@@ -1,9 +1,16 @@
 'use client'
 
-import { useId, useState } from 'react'
+import {
+  useId,
+  useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Switch } from '@/shared/components/ui/switch'
-import { Button, Input, SegmentedControl, Select } from '@/shared/components/ui'
+import { Button,
+  Input,
+  SegmentedControl,
+  Select,
+  iconSize,
+} from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
 import {
   descriptorLabel,
@@ -182,7 +189,7 @@ export function MediaParameterControls({ model, values, onChange, countUnit }: M
             icon={
               <ChevronDown
                 aria-hidden="true"
-                className={cn('h-[var(--icon-xs)] w-[var(--icon-xs)] transition-transform motion-position', advancedOpen && 'rotate-180')}
+                className={cn(`${iconSize.xs} transition-transform motion-position`, advancedOpen && 'rotate-180')}
               />
             }
           >

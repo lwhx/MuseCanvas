@@ -3,6 +3,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { Moon, Sun } from 'lucide-react'
 import { cn } from '@/shared/lib/cn'
+import { controlSquare, iconSize } from './size'
 
 export type Theme = 'light' | 'dark'
 
@@ -59,14 +60,14 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
       aria-pressed={isDark}
       className={cn(
-        'inline-flex h-[var(--control-md)] w-[var(--control-md)] items-center justify-center rounded-control',
-        'text-muted-foreground transition-colors hover:bg-tonal hover:text-foreground motion-press',
+        'inline-flex items-center justify-center rounded-control',
+        controlSquare.md,
+        'text-muted-foreground hover:bg-tonal-hover hover:text-foreground active:bg-tonal-active motion-press',
         className,
       )}
-      style={{ transitionDuration: 'var(--motion-fast)', transitionTimingFunction: 'var(--ease-standard)' }}
     >
-      <Sun aria-hidden="true" className="block h-[var(--icon-md)] w-[var(--icon-md)] dark:hidden" />
-      <Moon aria-hidden="true" className="hidden h-[var(--icon-md)] w-[var(--icon-md)] dark:block" />
+      <Sun aria-hidden="true" className={`block ${iconSize.md} dark:hidden`} />
+      <Moon aria-hidden="true" className={`hidden ${iconSize.md} dark:block`} />
     </button>
   )
 }

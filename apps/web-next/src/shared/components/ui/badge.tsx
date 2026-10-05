@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode, Ref } from 'react'
 import { cn } from '@/shared/lib/cn'
+import { iconSlot } from './size'
 
 export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'accent'
 export type BadgeVariant = 'soft' | 'solid' | 'outline'
@@ -67,7 +68,7 @@ export function Badge({ tone = 'neutral', variant = 'soft', icon, className, ref
       {...rest}
     >
       {icon ? (
-        <span aria-hidden="true" className="inline-flex shrink-0 [&>svg]:h-[var(--icon-xs)] [&>svg]:w-[var(--icon-xs)]">
+        <span aria-hidden="true" className={`inline-flex shrink-0 ${iconSlot.xs}`}>
           {icon}
         </span>
       ) : null}

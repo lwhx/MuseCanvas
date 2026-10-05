@@ -6,6 +6,7 @@ import { Check, CircleAlert, Info, TriangleAlert, X } from 'lucide-react'
 import { cn } from '@/shared/lib/cn'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
+import { controlSquare, iconSize } from './size'
 
 export type ToastVariant = 'success' | 'warning' | 'error' | 'info'
 
@@ -204,7 +205,7 @@ function ToastViewport({
             )}
           >
             <div className="flex items-start gap-3">
-              <Glyph className={cn('mt-0.5 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0', TONE_ICON[toast.variant])} aria-hidden="true" />
+              <Glyph className={cn(`mt-0.5 ${iconSize.sm} shrink-0`, TONE_ICON[toast.variant])} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">{toast.title}</p>
                 {toast.description ? (
@@ -219,8 +220,7 @@ function ToastViewport({
                       toast.action?.onClick()
                       onDismiss(toast.id)
                     }}
-                    className="inline-flex h-[var(--control-sm)] items-center rounded-control px-2 text-sm font-medium text-primary transition-colors hover:bg-tonal motion-press"
-                    style={{ transitionDuration: 'var(--motion-fast)', transitionTimingFunction: 'var(--ease-standard)' }}
+                    className="inline-flex h-[var(--control-sm)] items-center rounded-control px-2 text-sm font-medium text-primary hover:bg-tonal-hover active:bg-tonal-active motion-press"
                   >
                     {toast.action.label}
                   </button>
@@ -229,10 +229,13 @@ function ToastViewport({
                   type="button"
                   onClick={() => onDismiss(toast.id)}
                   aria-label="关闭通知"
-                  className="inline-flex h-[var(--control-sm)] w-[var(--control-sm)] items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-tonal hover:text-foreground motion-press"
-                  style={{ transitionDuration: 'var(--motion-fast)', transitionTimingFunction: 'var(--ease-standard)' }}
+                  className={cn(
+                    'inline-flex items-center justify-center rounded-control',
+                    controlSquare.sm,
+                    'text-muted-foreground hover:bg-tonal-hover hover:text-foreground active:bg-tonal-active motion-press',
+                  )}
                 >
-                  <X className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
+                  <X className={iconSize.sm} aria-hidden="true" />
                 </button>
               </div>
             </div>

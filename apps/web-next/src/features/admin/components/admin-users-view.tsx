@@ -5,12 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { AdminUser, Invitation, UserRole } from '@/shared/types'
+import { formatLocalizedDate } from '@/shared/lib/format'
 import { RefreshCw, UserPlus } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
-  Card,
+  DataTable,
   Dialog,
   EmptyState,
   FormField,
@@ -18,6 +19,13 @@ import {
   PageHeader,
   SkeletonText,
   SkeletonTile,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeadCell,
+  TableRow,
+  TableSkeletonRow,
+  TableStateRow,
   Tabs,
 } from '@/shared/components/ui'
 import type { BadgeTone, TabItem } from '@/shared/components/ui'
@@ -114,161 +122,127 @@ export function AdminUsersView() {
       id: 'users',
       label: `注册用户 (${users.length})`,
       content: (
-        <Card className="gap-0 overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">注册用户列表</caption>
-              <thead className="bg-tonal text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-3 text-sm font-medium">
-                    邮箱
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-sm font-medium">
-                    角色
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
-                    注册时间
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border" aria-busy={usersLoading || undefined}>
-                {usersLoading ? (
-                  Array.from({ length: 5 }, (_, index) => (
-                    <tr key={index}>
-                      <td className="px-4 py-3"><SkeletonText width="14rem" /></td>
-                      <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" /></td>
-                      <td className="px-4 py-3 text-right"><SkeletonText width="7rem" /></td>
-                    </tr>
-                  ))
-                ) : usersError ? (
-                  <tr>
-                    <td colSpan={3}>
-                      <EmptyState
-                        variant="error"
-                        objectName="用户列表"
-                        title="无法加载用户列表"
-                        description="请求用户数据时出现问题，可能是服务暂时不可用。请稍后重试，或检查后端服务状态。"
-                        actionLabel="刷新重试"
-                        onAction={() => refetchUsers()}
-                      />
-                    </td>
-                  </tr>
-                ) : users.length > 0 ? (
-                  users.map((u) => {
-                    const role = ROLE_META[u.role] ?? ROLE_META.user
-                    return (
-                      <tr
-                        key={u.id}
-                        className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
-                      >
-                        <td className="px-4 py-3 font-medium text-foreground">{u.email}</td>
-                        <td className="px-4 py-3">
-                          <Badge tone={role.tone}>{role.label}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {new Date(u.createdAt).toLocaleDateString('zh-CN')}
-                        </td>
-                      </tr>
-                    )
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={3}>
-                      <EmptyState
-                        variant="first-use"
-                        objectName="注册用户"
-                        density="compact"
-                        title="还没有注册用户"
-                        description="用户通过登录或邀请码注册后，会显示在这里。"
-                      />
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <DataTable caption="注册用户列表" columns={3}>
+          <TableHead>
+            <TableHeadCell>邮箱</TableHeadCell>
+            <TableHeadCell>角色</TableHeadCell>
+            <TableHeadCell align="right">注册时间</TableHeadCell>
+          </TableHead>
+          <TableBody busy={usersLoading}>
+            {usersLoading ? (
+              Array.from({ length: 5 }, (_, index) => (
+                <TableSkeletonRow
+                  key={index}
+                  cells={[
+                    <SkeletonText key="email" width="14rem" />,
+                    <SkeletonTile key="role" className="aspect-auto h-6 w-16 rounded-pill" />,
+                    { align: 'right', content: <SkeletonText width="7rem" /> },
+                  ]}
+                />
+              ))
+            ) : usersError ? (
+              <TableStateRow>
+                <EmptyState
+                  variant="error"
+                  objectName="用户列表"
+                  title="无法加载用户列表"
+                  description="请求用户数据时出现问题，可能是服务暂时不可用。请稍后重试，或检查后端服务状态。"
+                  actionLabel="刷新重试"
+                  onAction={() => refetchUsers()}
+                />
+              </TableStateRow>
+            ) : users.length > 0 ? (
+              users.map((u) => {
+                const role = ROLE_META[u.role] ?? ROLE_META.user
+                return (
+                  <TableRow key={u.id}>
+                    <TableCell tone="strong">{u.email}</TableCell>
+                    <TableCell>
+                      <Badge tone={role.tone}>{role.label}</Badge>
+                    </TableCell>
+                    <TableCell align="right" mono tabular tone="muted">
+                      {formatLocalizedDate(u.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            ) : (
+              <TableStateRow>
+                <EmptyState
+                  variant="first-use"
+                  objectName="注册用户"
+                  density="compact"
+                  title="还没有注册用户"
+                  description="用户通过登录或邀请码注册后，会显示在这里。"
+                />
+              </TableStateRow>
+            )}
+          </TableBody>
+        </DataTable>
       ),
     },
     {
       id: 'invitations',
       label: `邀请码 (${invitations.length})`,
       content: (
-        <Card className="gap-0 overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">邀请码列表</caption>
-              <thead className="bg-tonal text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-3 text-sm font-medium">
-                    邀请码标识
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-sm font-medium">
-                    状态
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
-                    创建时间
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border" aria-busy={invitesLoading || undefined}>
-                {invitesLoading ? (
-                  Array.from({ length: 5 }, (_, index) => (
-                    <tr key={index}>
-                      <td className="px-4 py-3"><SkeletonText width="12rem" /></td>
-                      <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" /></td>
-                      <td className="px-4 py-3 text-right"><SkeletonText width="7rem" /></td>
-                    </tr>
-                  ))
-                ) : invitesError ? (
-                  <tr>
-                    <td colSpan={3}>
-                      <EmptyState
-                        variant="error"
-                        objectName="邀请码列表"
-                        title="无法加载邀请码列表"
-                        description="请求邀请码数据时出现问题，可能是服务暂时不可用。请稍后重试，或检查后端服务状态。"
-                        actionLabel="刷新重试"
-                        onAction={() => refetchInvites()}
-                      />
-                    </td>
-                  </tr>
-                ) : invitations.length > 0 ? (
-                  invitations.map((inv) => {
-                    const status = invitationStatus(inv)
-                    return (
-                      <tr
-                        key={inv.id}
-                        className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
-                      >
-                        <td className="px-4 py-3 font-mono tabular-nums text-foreground">{inv.code || inv.id}</td>
-                        <td className="px-4 py-3">
-                          <Badge tone={status.tone}>{status.label}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {new Date(inv.createdAt).toLocaleDateString('zh-CN')}
-                        </td>
-                      </tr>
-                    )
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={3}>
-                      <EmptyState
-                        variant="first-use"
-                        objectName="邀请码"
-                        density="compact"
-                        title="还没有邀请码"
-                        description="创建邀请码后，把它发给需要注册的用户即可。"
-                        onAction={openInviteDialog}
-                      />
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <DataTable caption="邀请码列表" columns={3}>
+          <TableHead>
+            <TableHeadCell>邀请码标识</TableHeadCell>
+            <TableHeadCell>状态</TableHeadCell>
+            <TableHeadCell align="right">创建时间</TableHeadCell>
+          </TableHead>
+          <TableBody busy={invitesLoading}>
+            {invitesLoading ? (
+              Array.from({ length: 5 }, (_, index) => (
+                <TableSkeletonRow
+                  key={index}
+                  cells={[
+                    <SkeletonText key="code" width="12rem" />,
+                    <SkeletonTile key="status" className="aspect-auto h-6 w-16 rounded-pill" />,
+                    { align: 'right', content: <SkeletonText width="7rem" /> },
+                  ]}
+                />
+              ))
+            ) : invitesError ? (
+              <TableStateRow>
+                <EmptyState
+                  variant="error"
+                  objectName="邀请码列表"
+                  title="无法加载邀请码列表"
+                  description="请求邀请码数据时出现问题，可能是服务暂时不可用。请稍后重试，或检查后端服务状态。"
+                  actionLabel="刷新重试"
+                  onAction={() => refetchInvites()}
+                />
+              </TableStateRow>
+            ) : invitations.length > 0 ? (
+              invitations.map((inv) => {
+                const status = invitationStatus(inv)
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell mono tabular tone="foreground">{inv.code || inv.id}</TableCell>
+                    <TableCell>
+                      <Badge tone={status.tone}>{status.label}</Badge>
+                    </TableCell>
+                    <TableCell align="right" mono tabular tone="muted">
+                      {formatLocalizedDate(inv.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            ) : (
+              <TableStateRow>
+                <EmptyState
+                  variant="first-use"
+                  objectName="邀请码"
+                  density="compact"
+                  title="还没有邀请码"
+                  description="创建邀请码后，把它发给需要注册的用户即可。"
+                  onAction={openInviteDialog}
+                />
+              </TableStateRow>
+            )}
+          </TableBody>
+        </DataTable>
       ),
     },
   ]

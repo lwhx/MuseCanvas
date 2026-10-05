@@ -1,28 +1,39 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from 'react'
+import { useRouter,
+  useSearchParams } from 'next/navigation'
 import { editSelectionIsUsable } from '@musecanvas/contracts'
 import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import { useModelsQuery } from '@/shared/hooks/useModels'
-import { useJobsQuery, useCreateJob, useCancelJob, useRetryJob } from '@/shared/hooks/useJobs'
+import { useJobsQuery,
+  useCreateJob,
+  useCancelJob,
+  useRetryJob } from '@/shared/hooks/useJobs'
 import { useCreateImageEdit } from '../lib/use-image-edit'
-import { maskCapabilityBlockReason, modelAcceptsMask } from '@/shared/lib/model-capabilities'
+import { maskCapabilityBlockReason,
+  modelAcceptsMask } from '@/shared/lib/model-capabilities'
 import {
   buildGenerationInputs,
   inputPlanViolations,
   resolveImageInputPlan,
-} from '@/shared/lib/generation-params'
+  } from '@/shared/lib/generation-params'
 import {
   buildMediaParameters,
   canonicalNameOf,
   descriptorLabel,
   parameterIssues,
   reconcileModelParameters,
-} from '@/shared/lib/media-parameters'
-import { clearReferenceImages, reconcileStagedRoles } from '@/shared/lib/reference-upload'
+  } from '@/shared/lib/media-parameters'
+import { clearReferenceImages,
+  reconcileStagedRoles } from '@/shared/lib/reference-upload'
 import { GENERATE_ROUTE } from '@/shared/lib/app-routes'
-import { MediaFrame, stageAspectRatio } from '@/shared/components/media-frame'
+import { MediaFrame,
+  stageAspectRatio } from '@/shared/components/media-frame'
 import { JobStatusBadge } from '@/shared/components/job-status-badge'
 import {
   Alert,
@@ -38,6 +49,7 @@ import {
   SkeletonTile,
   Spinner,
   buttonVariants,
+  iconSize,
 } from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
 import { isJobActive } from '@/shared/lib/job-status'
@@ -553,7 +565,7 @@ export function GenerateConsole() {
         >
           <div className="flex h-[var(--layout-header)] shrink-0 items-center justify-between px-4">
             <div className="flex items-center gap-2">
-              <Clock className="h-[var(--icon-sm)] w-[var(--icon-sm)] text-muted-foreground" aria-hidden="true" />
+              <Clock className={`${iconSize.sm} text-muted-foreground`} aria-hidden="true" />
               <span className="text-xs font-medium text-foreground">任务面板</span>
             </div>
             <IconButton
@@ -618,7 +630,6 @@ export function GenerateConsole() {
                         aria-current={isSelected ? 'true' : undefined}
                         className={cn(
                           'relative flex w-full min-w-0 gap-3 rounded-control p-2.5 pl-3 text-left transition-colors',
-                          'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
                           isSelected
                             ? 'bg-tonal-selected'
                             : 'bg-tonal enabled:hover:bg-tonal-hover',
@@ -645,7 +656,7 @@ export function GenerateConsole() {
                               hasAudio={isVideoOutput(firstOutput) ? firstOutput.metadata.hasAudio : undefined}
                             />
                           ) : (
-                            <ImageOff aria-hidden="true" className="h-[var(--icon-md)] w-[var(--icon-md)] text-muted-foreground" />
+                            <ImageOff aria-hidden="true" className={`${iconSize.md} text-muted-foreground`} />
                           )}
                         </div>
                         <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
@@ -870,7 +881,7 @@ export function GenerateConsole() {
               <Card className="items-center">
                 <div className="flex w-full max-w-3xl flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <Crop className="h-[var(--icon-sm)] w-[var(--icon-sm)] text-primary" aria-hidden="true" />
+                    <Crop className={`${iconSize.sm} text-primary`} aria-hidden="true" />
                     <CardTitle level={3} className="text-sm">局部修改</CardTitle>
                     <span className="text-xs text-muted-foreground">· 源图保持不变，结果作为新任务生成</span>
                   </div>

@@ -10,6 +10,7 @@ import { useGenerationMode } from '@/shared/hooks/useGenerationMode'
 import { useModelsQuery } from '@/shared/hooks/useModels'
 import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import { maskCapabilityBlockReason, modelAcceptsMask, resolveActiveImageModel } from '@/shared/lib/model-capabilities'
+import { formatDateTime } from '@/shared/lib/format'
 import { assetPlaybackUrl, isVideoAsset } from '@/shared/types'
 import type { Asset } from '@/shared/types'
 import { Button, IconButton, buttonVariants } from '@/shared/components/ui'
@@ -24,14 +25,6 @@ export interface AssetLightboxProps {
   activeAssetId: string | null
   onClose: () => void
   onSelect: (assetId: string) => void
-}
-
-/** `YYYY-MM-DD HH:mm` (copy.md §9): the spec's date format, and 24-hour time. */
-function formatDateTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 /**

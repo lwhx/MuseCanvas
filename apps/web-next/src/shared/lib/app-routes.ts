@@ -14,3 +14,16 @@ export const LIBRARY_ROUTE = '/library'
 export function isOnGenerate(pathname: string): boolean {
   return pathname === GENERATE_ROUTE || pathname.startsWith(`${GENERATE_ROUTE}/`)
 }
+
+/**
+ * The post-login `?from=` target, reduced to a same-origin path. Anything that
+ * could leave the site (`https://…`, protocol-relative `//host`, `/\host`, which
+ * browsers normalise to `//host`) falls back to the creation console, so the
+ * login page can never be used as an open redirect.
+ */
+export function safeRedirectPath(from: string | null | undefined): string {
+  if (!from || !from.startsWith('/') || from.startsWith('//') || from.startsWith('/\\')) {
+    return GENERATE_ROUTE
+  }
+  return from
+}

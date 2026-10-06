@@ -62,6 +62,10 @@ jobs:
       - name: Test providers package incl. media contract (no external services)
         run: pnpm --filter @musecanvas/providers test
 
+      # Production HTTP integration starts Next; its build is a required prerequisite.
+      - name: Build workspaces (no external services)
+        run: pnpm -r --if-present build
+
       - name: Test media provider contract integration (no external services)
         # Quoted glob, not a filename: this step used to name
         # media-provider-contract.test.ts specifically, so any test added under
@@ -80,6 +84,3 @@ jobs:
 
       - name: Test worker app where script exists (no external services)
         run: pnpm --filter @musecanvas/worker --if-present test
-
-      - name: Build workspaces (no external services)
-        run: pnpm -r --if-present build

@@ -4,10 +4,11 @@ import { useCallback, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
-import { ArrowLeft, Mail } from 'lucide-react'
+import { ArrowLeftIcon as ArrowLeft, EnvelopeSimpleIcon as Mail } from '@phosphor-icons/react'
 import { api } from '@/shared/services/api'
 import { useAuthUiStore } from '@/shared/stores/auth-ui-store'
 import type { User } from '@/shared/types'
+import { safeRedirectPath } from '@/shared/lib/app-routes'
 import {
   Button,
   FieldGroup,
@@ -39,7 +40,7 @@ const OTP_SEND_FAILED = '验证码发送失败。请确认邮箱地址填写无�
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const from = searchParams.get('from') || '/generate'
+  const from = safeRedirectPath(searchParams.get('from'))
 
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
@@ -211,7 +212,7 @@ export function LoginForm() {
             type="submit"
             loading={loading}
             fullWidth
-            icon={<Mail aria-hidden="true" />}
+            icon={<Mail weight="bold" aria-hidden="true" />}
           >
             获取登录验证码
           </Button>
@@ -249,7 +250,7 @@ export function LoginForm() {
               variant="secondary"
               aria-label="返回上一步，检查邮箱地址"
               onClick={backToEmail}
-              icon={<ArrowLeft aria-hidden="true" />}
+              icon={<ArrowLeft weight="bold" aria-hidden="true" />}
             />
             <Button type="submit" loading={loading} className="flex-1">
               确认并发送验证码
@@ -293,7 +294,7 @@ export function LoginForm() {
               variant="secondary"
               aria-label="返回上一步，重新填写邮箱地址"
               onClick={backToEmail}
-              icon={<ArrowLeft aria-hidden="true" />}
+              icon={<ArrowLeft weight="bold" aria-hidden="true" />}
             />
             <Button type="submit" loading={loading} className="flex-1">
               验证并登录

@@ -1,0 +1,75 @@
+name: Web Checks CI
+
+# Frontend-only gate for `apps/web-next`.
+#
+# `media-quality.yml` already runs `pnpm -r --if-present typecheck` and
+# `pnpm -r --if-present build` for every workspace on the same PRs, so the
+# workspace-wide checks are NOT duplicated here. What this workflow adds is the one
+# rule that had no enforcement anywhere: `scripts/check-web-tokens.mjs`, which fails
+# on a raw colour, an undefined token, an off-scale transition or a hand-written
+# `h-[var(--icon-x)] w-[var(--icon-x)]` pair. Its step runs first and is unscoped, so
+# a token regression is reported as a token failure rather than as a build error
+# somewhere downstream.
+#
+# The web-next typecheck stays too, scoped with `--filter` (seconds, not minutes) so
+# this workflow is meaningful on its own even if that workflow's path filters change.
+#
+# No secrets, no external services, no image build or push.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "apps/web-next/**"
+      - "scripts/check-web-tokens.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/web-checks.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "apps/web-next/**"
+      - "scripts/check-web-tokens.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/web-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-checks:
+    name: Web token guard and typecheck (no external services)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js with pnpm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies with frozen lockfile (no external services)
+        run: pnpm install --frozen-lockfile
+
+      - name: Check design tokens (no external services)
+        run: pnpm check:tokens
+
+      - name: Typecheck the web app (no external services)
+        run: pnpm --filter @musecanvas/web-next typecheck

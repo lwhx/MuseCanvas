@@ -62,7 +62,9 @@ export interface GenerateUiState {
   // Inspector / UI state
   selectedJobId: string | null
   activeOutputIndex: number
+  /** Only the creation request is busy; background jobs never acquire this lock. */
   isGenerating: boolean
+  composerExpanded: boolean
   advancedOpen: boolean
   /** Non-null while 局部修改 owns the stage. See `EditTarget`. */
   editTarget: EditTarget | null
@@ -94,6 +96,9 @@ export interface GenerateUiState {
   setSelectedJobId: (jobId: string | null) => void
   setActiveOutputIndex: (idx: number) => void
   setIsGenerating: (generating: boolean) => void
+  tryBeginSubmission: () => boolean
+  finishSubmission: () => void
+  setComposerExpanded: (expanded: boolean) => void
   setInlineUploadError: (error: string | null) => void
   /** Enter 局部修改 on one image, or leave it with `null`. Takes whole targets
    *  only: the rectangle has its own action below, so a caller can never echo
@@ -121,35 +126,36 @@ const initialState = {
   selectedJobId: null as string | null,
   activeOutputIndex: 0,
   isGenerating: false,
+  composerExpanded: false,
   advancedOpen: false,
   editTarget: null as EditTarget | null,
-  railOpen: true,
+  railOpen: false,
   activeBoardOpen: true,
   historyOpen: true,
 }
 
-export const useGenerateUiStore = create<GenerateUiState>((set) => ({
+export const useGenerateUiStore = create<GenerateUiState>((set, get) => ({
   ...initialState,
 
-  setPrompt: (prompt) => set({ prompt }),
-  setNegativePrompt: (negativePrompt) => set({ negativePrompt }),
-  setActiveTab: (activeTab) => set({ activeTab }),
+  setPrompt: (prompt) => { if (!get().isGenerating) set({ prompt }) },
+  setNegativePrompt: (negativePrompt) => { if (!get().isGenerating) set({ negativePrompt }) },
+  setActiveTab: (activeTab) => { if (!get().isGenerating) set({ activeTab }) },
   setSelectedModelId: (tab, id) =>
     set((state) => ({
-      selectedModelIdByKind: { ...state.selectedModelIdByKind, [tab]: id },
+      selectedModelIdByKind: state.isGenerating ? state.selectedModelIdByKind : { ...state.selectedModelIdByKind, [tab]: id },
     })),
   setParam: (tab, name, value) =>
     set((state) => ({
-      paramsByKind: { ...state.paramsByKind, [tab]: { ...state.paramsByKind[tab], [name]: value } },
+      paramsByKind: state.isGenerating ? state.paramsByKind : { ...state.paramsByKind, [tab]: { ...state.paramsByKind[tab], [name]: value } },
     })),
   clearParams: (tab) =>
-    set((state) => ({ paramsByKind: { ...state.paramsByKind, [tab]: {} } })),
+    set((state) => ({ paramsByKind: state.isGenerating ? state.paramsByKind : { ...state.paramsByKind, [tab]: {} } })),
   replaceParams: (tab, values) =>
-    set((state) => ({ paramsByKind: { ...state.paramsByKind, [tab]: values } })),
+    set((state) => ({ paramsByKind: state.isGenerating ? state.paramsByKind : { ...state.paramsByKind, [tab]: values } })),
 
   setStagedImages: (images) =>
     set((state) => ({
-      stagedImages: typeof images === 'function' ? images(state.stagedImages) : images,
+      stagedImages: state.isGenerating ? state.stagedImages : typeof images === 'function' ? images(state.stagedImages) : images,
     })),
 
   beginReferencePreparation: () => {
@@ -163,7 +169,7 @@ export const useGenerateUiStore = create<GenerateUiState>((set) => ({
 
   addStagedImage: (image) =>
     set((state) => ({
-      stagedImages: [...state.stagedImages, image],
+      stagedImages: state.isGenerating ? state.stagedImages : [...state.stagedImages, image],
     })),
 
   updateStagedImage: (localId, patch) =>
@@ -173,6 +179,8 @@ export const useGenerateUiStore = create<GenerateUiState>((set) => ({
       ),
     })),
 
+  // Internal decode/upload cleanup must finish even while an unrelated edit is
+  // creating. User removals are guarded at the reference dialog boundary.
   removeStagedImage: (localId) =>
     set((state) => ({
       stagedImages: state.stagedImages.filter((img) => img.localId !== localId),
@@ -182,17 +190,28 @@ export const useGenerateUiStore = create<GenerateUiState>((set) => ({
   setSelectedJobId: (selectedJobId) => set({ selectedJobId, activeOutputIndex: 0 }),
   setActiveOutputIndex: (activeOutputIndex) => set({ activeOutputIndex }),
   setIsGenerating: (isGenerating) => set({ isGenerating }),
+  tryBeginSubmission: () => {
+    if (get().isGenerating) return false
+    set({ isGenerating: true })
+    return true
+  },
+  finishSubmission: () => set({ isGenerating: false }),
+  setComposerExpanded: (composerExpanded) => set({ composerExpanded }),
   setInlineUploadError: (inlineUploadError) => set({ inlineUploadError }),
-  setEditTarget: (editTarget) => set({ editTarget }),
+  setEditTarget: (editTarget) => {
+    // Success can leave editing while the request still owns the lock.
+    if (!get().isGenerating || editTarget === null) set({ editTarget })
+  },
   setEditSelection: (selection) =>
     set((state) =>
-      state.editTarget ? { editTarget: { ...state.editTarget, selection } } : state,
+      state.editTarget && !state.isGenerating ? { editTarget: { ...state.editTarget, selection } } : state,
     ),
   toggleAdvanced: () => set((state) => ({ advancedOpen: !state.advancedOpen })),
   setRailOpen: (railOpen) => set({ railOpen }),
   setActiveBoardOpen: (activeBoardOpen) => set({ activeBoardOpen }),
   setHistoryOpen: (historyOpen) => set({ historyOpen }),
-  resetForm: () =>
+  resetForm: () => {
+    if (get().isGenerating) return
     set({
       prompt: '',
       negativePrompt: '',
@@ -202,5 +221,6 @@ export const useGenerateUiStore = create<GenerateUiState>((set) => ({
       selectedJobId: null,
       activeOutputIndex: 0,
       editTarget: null,
-    }),
+    })
+  },
 }))

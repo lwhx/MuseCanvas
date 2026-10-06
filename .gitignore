@@ -69,6 +69,7 @@ CLAUDE.md
 .agents/
 .codex/
 .qoder/
+.serena/
 /skills/
 .runtime/
 .zcode/

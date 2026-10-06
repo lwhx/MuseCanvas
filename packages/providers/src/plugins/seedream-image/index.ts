@@ -497,7 +497,9 @@ export class SeedreamImagePlugin implements MediaProviderPlugin {
     let json: SeedreamResponsePayload
     try {
       json = await response.json<SeedreamResponsePayload>()
-    } catch {
+    } catch (error) {
+      // Body reads can fail after successful headers; preserve transport/safety diagnostics.
+      if (error instanceof NormalizedProviderError) throw error
       return {
         status: 'failed',
         error: NormalizedProviderError.create(

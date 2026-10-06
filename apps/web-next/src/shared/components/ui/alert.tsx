@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
-import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { WarningCircleIcon as CircleAlert, CheckCircleIcon as CircleCheck, InfoIcon as Info, WarningIcon as TriangleAlert, XIcon as X } from '@phosphor-icons/react/ssr'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { IconButton } from './button'
+import { iconSize, iconSlot } from './size'
 
 export type AlertTone = 'info' | 'success' | 'warning' | 'danger'
 
@@ -14,7 +15,7 @@ const toneClasses: Record<AlertTone, { wrap: string; icon: string }> = {
   danger: { wrap: 'border-danger-border bg-danger-soft', icon: 'text-danger' },
 }
 
-const toneIcons: Record<AlertTone, LucideIcon> = {
+const toneIcons: Record<AlertTone, PhosphorIcon> = {
   info: Info,
   success: CircleCheck,
   warning: TriangleAlert,
@@ -58,7 +59,7 @@ export function Alert({
   className,
 }: AlertProps) {
   const Icon = toneIcons[tone]
-  const shownIcon = icon === false ? null : icon ?? <Icon aria-hidden="true" className="h-[var(--icon-md)] w-[var(--icon-md)]" />
+  const shownIcon = icon === false ? null : icon ?? <Icon weight="fill" aria-hidden="true" className={iconSize.md} />
 
   return (
     <div
@@ -69,7 +70,7 @@ export function Alert({
         className,
       )}
     >
-      {shownIcon ? <span className={cn('mt-0.5 shrink-0 [&>svg]:h-[var(--icon-md)] [&>svg]:w-[var(--icon-md)]', toneClasses[tone].icon)}>{shownIcon}</span> : null}
+      {shownIcon ? <span className={cn(`mt-0.5 shrink-0 ${iconSlot.md}`, toneClasses[tone].icon)}>{shownIcon}</span> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {title ? <p className="text-sm font-medium text-foreground">{title}</p> : null}
         {children ? <div className="text-sm text-muted-foreground">{children}</div> : null}
@@ -81,7 +82,7 @@ export function Alert({
           size="sm"
           aria-label={dismissLabel}
           onClick={onDismiss}
-          icon={<X aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)]" />}
+          icon={<X weight="bold" aria-hidden="true" className={iconSize.sm} />}
         />
       ) : null}
     </div>

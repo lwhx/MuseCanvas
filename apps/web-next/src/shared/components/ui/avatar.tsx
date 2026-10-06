@@ -1,21 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { UserRound } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { UserCircleIcon as UserRound } from '@phosphor-icons/react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
+import { controlSquare, iconSize } from './size'
 
 /**
  * The spec's size ladder (components.md Avatar row): xs 24 / sm 32 / md 40 /
  * lg 48 / xl 64. The letter grows with the box (12px at xs, 14px through md, then
- * 16 / 18px); the four smaller boxes match `--control-*`, and `xl` is the only
- * literal here because that control ladder stops at 56.
+ * 16 / 18px). The four smaller boxes ARE the control ladder, so they reference it
+ * instead of repeating its pixels; `xl` is the one literal here because the control
+ * ladder stops at 56.
  */
 const SIZE_CLASS = {
-  xs: 'h-6 w-6 text-xs',
-  sm: 'h-8 w-8 text-sm',
-  md: 'h-10 w-10 text-sm',
-  lg: 'h-12 w-12 text-base',
+  xs: `${controlSquare.xs} text-xs`,
+  sm: `${controlSquare.sm} text-sm`,
+  md: `${controlSquare.md} text-sm`,
+  lg: `${controlSquare.lg} text-base`,
   xl: 'h-16 w-16 text-lg',
 } as const
 
@@ -52,7 +54,7 @@ interface AvatarSharedProps {
   /** First-letter fallback source — a name or e-mail; only its first glyph shows. */
   initial?: string
   /** Last resort when there is neither an image nor an initial. */
-  fallbackIcon?: LucideIcon
+  fallbackIcon?: PhosphorIcon
   /** Presence dot, always with its own label; the colour is never the only clue. */
   status?: AvatarStatus
   /**
@@ -129,7 +131,7 @@ export function Avatar({
           {letter}
         </span>
       ) : (
-        <Icon aria-hidden="true" className="h-[var(--icon-sm)] w-[var(--icon-sm)] text-muted-foreground" />
+        <Icon weight="duotone" aria-hidden="true" className={`${iconSize.sm} text-muted-foreground`} />
       )}
 
       {status ? (

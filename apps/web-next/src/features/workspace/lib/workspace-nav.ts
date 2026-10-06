@@ -1,5 +1,5 @@
-import type { LucideIcon } from 'lucide-react'
-import { Image as ImageIcon, Video } from 'lucide-react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
+import { ImageIcon, VideoCameraIcon as Video } from '@phosphor-icons/react/ssr'
 import type { GenerateModeTab } from '@/shared/types'
 import { LIBRARY_ROUTE, isOnGenerate } from '@/shared/lib/app-routes'
 
@@ -18,7 +18,7 @@ export type WorkspaceNavItem =
       label: string
       /** Same value as `key`; lets a renderer branch on `kind` without casting. */
       mode: GenerateModeTab
-      icon: LucideIcon
+      icon: PhosphorIcon
     }
   | {
       key: 'library'

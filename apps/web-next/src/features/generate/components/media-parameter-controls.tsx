@@ -1,10 +1,16 @@
 'use client'
 
-import { useId, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import {
+  useEffect,
+  useState } from 'react'
+import { CaretDownIcon as ChevronDown } from '@phosphor-icons/react'
 import { Switch } from '@/shared/components/ui/switch'
-import { Button, Input, SegmentedControl, Select } from '@/shared/components/ui'
-import { cn } from '@/shared/lib/cn'
+import { Button,
+  Dialog,
+  Input,
+  SegmentedControl,
+  Select,
+} from '@/shared/components/ui'
 import {
   descriptorLabel,
   descriptorOptions,
@@ -15,6 +21,7 @@ import {
   resolveDescriptor,
   wireType,
   canonicalNameOf,
+  parameterIssues,
 } from '@/shared/lib/media-parameters'
 import type { ParameterCarrier, ParameterState, ParameterValue } from '@/shared/lib/media-parameters'
 import { SizePickerControl } from './size-picker-control'
@@ -35,6 +42,7 @@ export interface MediaParameterControlsProps {
    * console because it knows whether it is showing images or clips.
    */
   countUnit?: string
+  disabled?: boolean
 }
 
 /** Past this many options a segmented row stops fitting the control bar. */
@@ -51,22 +59,23 @@ function labelId(descriptor: ParameterDescriptor): string {
   return `gen-param-${descriptor.name}`
 }
 
-export function MediaParameterControls({ model, values, onChange, countUnit }: MediaParameterControlsProps) {
+export function MediaParameterControls({ model, values, onChange, countUnit, disabled = false }: MediaParameterControlsProps) {
   // Visibility depends on the current values, because a `dependsOn` parameter is
   // only offered while its controlling parameter holds a matching value.
   const controls = mediaControlDescriptors(model, values)
   const advancedControls = controls.filter((descriptor) => isAdvancedParameter(descriptor))
   const primaryControls = controls.filter((descriptor) => !isAdvancedParameter(descriptor))
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const advancedGroupId = useId()
+  useEffect(() => { if (disabled) setAdvancedOpen(false) }, [disabled])
+  const advancedIssues = parameterIssues(model, values).filter((issue) => advancedControls.some((descriptor) => descriptor.name === issue.parameter || canonicalNameOf(descriptor) === issue.parameter))
 
   const countDescriptor = resolveDescriptor(model, 'count')
   const countOptions = descriptorOptions(countDescriptor)
 
-  if (primaryControls.length === 0 && countOptions.length === 0) return null
+  if (controls.length === 0 && countOptions.length === 0) return null
 
   function pick(descriptor: ParameterDescriptor, raw: ParameterValue) {
-    onChange(canonicalNameOf(descriptor), marshalDescriptorValue(descriptor, raw))
+    if (!disabled) onChange(canonicalNameOf(descriptor), marshalDescriptorValue(descriptor, raw))
   }
 
   function renderControl(descriptor: ParameterDescriptor) {
@@ -145,7 +154,7 @@ export function MediaParameterControls({ model, values, onChange, countUnit }: M
   }
 
   return (
-    <>
+    <fieldset disabled={disabled} className="m-0 flex min-w-0 flex-wrap items-end gap-3 border-0 p-0">
       {primaryControls.map((descriptor) => (
         <ParameterField
           key={descriptor.name}
@@ -170,41 +179,23 @@ export function MediaParameterControls({ model, values, onChange, countUnit }: M
       )}
 
       {advancedControls.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-expanded={advancedOpen}
-            aria-controls={advancedGroupId}
-            onClick={() => setAdvancedOpen((open) => !open)}
-            className="w-fit px-2 text-xs text-muted-foreground"
-            icon={
-              <ChevronDown
-                aria-hidden="true"
-                className={cn('h-[var(--icon-xs)] w-[var(--icon-xs)] transition-transform motion-position', advancedOpen && 'rotate-180')}
-              />
-            }
-          >
-            更多参数
+        <>
+          <Button type="button" variant="secondary" size="sm" disabled={disabled} aria-haspopup="dialog" onClick={() => setAdvancedOpen(true)} icon={<ChevronDown weight="bold" aria-hidden="true" />}>
+            {advancedIssues.length > 0 ? '检查更多参数' : '更多参数'}
           </Button>
-          {advancedOpen && (
-            <div id={advancedGroupId} className="flex flex-wrap items-end gap-2">
+          <Dialog open={advancedOpen && !disabled} onClose={() => setAdvancedOpen(false)} title="更多参数" size="wide" description="参数范围与默认值来自当前模型；修改仅更新草稿，不会提交。" footer={<Button variant="secondary" onClick={() => setAdvancedOpen(false)}>完成</Button>}>
+            <fieldset disabled={disabled} className="m-0 flex min-w-0 flex-wrap items-start gap-4 border-0 p-0">
               {advancedControls.map((descriptor) => (
-                <ParameterField
-                  key={descriptor.name}
-                  descriptor={descriptor}
-                  model={model}
-                  as="div"
-                >
+                <ParameterField key={descriptor.name} descriptor={descriptor} model={model}>
                   {renderControl(descriptor)}
+                  {advancedIssues.filter((issue) => issue.parameter === descriptor.name || issue.parameter === canonicalNameOf(descriptor)).map((issue) => <p key={issue.parameter} role="alert" className="text-xs text-danger">{issue.message}</p>)}
                 </ParameterField>
               ))}
-            </div>
-          )}
-        </div>
+            </fieldset>
+          </Dialog>
+        </>
       )}
-    </>
+    </fieldset>
   )
 }
 
@@ -222,7 +213,7 @@ function ParameterField({
   const Tag = as
   const label = descriptorLabel(descriptor, model)
   return (
-    <Tag className="flex flex-col gap-1">
+    <Tag className="flex max-w-full flex-col gap-1 [&>[role=radiogroup]]:max-w-full [&>[role=radiogroup]]:overflow-x-auto">
       <span id={labelId(descriptor)} className="px-0.5 text-overline text-muted-foreground">
         {label}
       </span>

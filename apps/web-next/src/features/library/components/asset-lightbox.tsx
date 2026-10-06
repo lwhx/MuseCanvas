@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Crop, ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
+import { CropIcon as Crop, CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight, DownloadSimpleIcon as Download, XIcon as X } from '@phosphor-icons/react'
 import { MediaFrame } from '@/shared/components/media-frame'
 import { useDialog } from '@/shared/hooks/useDialog'
 import type { DialogDirection } from '@/shared/hooks/useDialog'
@@ -10,6 +10,7 @@ import { useGenerationMode } from '@/shared/hooks/useGenerationMode'
 import { useModelsQuery } from '@/shared/hooks/useModels'
 import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import { maskCapabilityBlockReason, modelAcceptsMask, resolveActiveImageModel } from '@/shared/lib/model-capabilities'
+import { formatDateTime } from '@/shared/lib/format'
 import { assetPlaybackUrl, isVideoAsset } from '@/shared/types'
 import type { Asset } from '@/shared/types'
 import { Button, IconButton, buttonVariants } from '@/shared/components/ui'
@@ -24,14 +25,6 @@ export interface AssetLightboxProps {
   activeAssetId: string | null
   onClose: () => void
   onSelect: (assetId: string) => void
-}
-
-/** `YYYY-MM-DD HH:mm` (copy.md §9): the spec's date format, and 24-hour time. */
-function formatDateTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 /**
@@ -136,7 +129,7 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
         onClick={onClose}
         aria-label="关闭预览"
         className="absolute right-4 top-4 rounded-pill bg-overlay/60 text-foreground-inverse enabled:hover:bg-overlay"
-        icon={<X aria-hidden="true" />}
+        icon={<X weight="bold" aria-hidden="true" />}
       />
 
       <NavButton direction="previous" disabled={isFirst} onNavigate={onNavigate} />
@@ -176,7 +169,7 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Crop aria-hidden="true" />}
+                icon={<Crop weight="bold" aria-hidden="true" />}
                 onClick={() => startRegionEdit(shown)}
                 disabled={Boolean(regionEditBlocked)}
                 title={regionEditBlocked ?? '到创作台框选要修改的区域'}
@@ -191,7 +184,7 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
                 aria-label="下载该作品"
                 className={buttonVariants({ variant: 'ghost', size: 'sm' })}
               >
-                <Download aria-hidden="true" />
+                <Download weight="bold" aria-hidden="true" />
                 下载
               </a>
             </div>
@@ -225,7 +218,7 @@ function NavButton({ direction, disabled, onNavigate }: NavButtonProps) {
       className={`absolute top-1/2 -translate-y-1/2 rounded-pill bg-overlay/60 text-foreground-inverse enabled:hover:bg-overlay ${
         previous ? 'left-4' : 'right-4'
       }`}
-      icon={<Icon aria-hidden="true" />}
+      icon={<Icon weight="bold" aria-hidden="true" />}
     />
   )
 }

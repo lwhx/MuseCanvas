@@ -1,23 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { ProviderCredential, ProviderTestStatus } from '@/shared/types'
 import { credentialPluginKey } from '../lib/provider-templates'
-import { Trash2 } from 'lucide-react'
+import { useAdminActions } from '../lib/use-admin-actions'
+import { AdminActionErrors } from './admin-confirm-dialog'
+import { AdminMobileRecords, AdminRecordDetailDialog, AdminRecordFields } from './admin-record-detail-dialog'
+import { TrashIcon as Trash2 } from '@phosphor-icons/react'
 import {
-  Alert,
   Badge,
   Button,
-  Card,
+  DataTable,
   EmptyState,
   IconButton,
   SkeletonText,
   SkeletonTile,
   Switch,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeadCell,
+  TableRow,
+  TableSkeletonRow,
+  TableStateRow,
 } from '@/shared/components/ui'
 
 interface AdminCredentialTableProps {
@@ -46,8 +55,6 @@ const TEST_STATUS_LABEL: Record<ProviderTestStatus, string> = {
   pending: '测试中',
 }
 
-const COLUMN_COUNT = 6
-
 // Shared credential console merged out of the former 供应商凭据 page: list,
 // enable/disable, connectivity test and delete. Creation lives in each page's
 // dialog because the payload shape differs per scope.
@@ -61,9 +68,10 @@ export function AdminCredentialTable({
   onRetry,
 }: AdminCredentialTableProps) {
   const queryClient = useQueryClient()
-  const [testingId, setTestingId] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{ id: string; success: boolean; msg: string } | null>(null)
-  const [actionError, setActionError] = useState('')
+  const recordListRef = useRef<HTMLDivElement | null>(null)
+  const [detailCredential, setDetailCredential] = useState<ProviderCredential | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ProviderCredential | null>(null)
+  const actions = useAdminActions()
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -71,12 +79,8 @@ export function AdminCredentialTable({
       if (!res.success) throw new Error(res.error?.message || '删除凭据失败')
       return res.data
     },
-    onSuccess: () => {
-      setActionError('')
-      queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
-    },
-    onError: (err: Error) => {
-      setActionError(err.message || '删除凭据失败')
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
     },
   })
 
@@ -86,177 +90,154 @@ export function AdminCredentialTable({
       if (!res.success) throw new Error(res.error?.message || '更新凭据状态失败')
       return res.data
     },
-    onSuccess: () => {
-      setActionError('')
-      queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
-    },
-    onError: (err: Error) => {
-      setActionError(err.message || '更新凭据状态失败')
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
     },
   })
 
-  async function handleTest(id: string) {
-    setTestingId(id)
-    setTestResult(null)
-    try {
-      const res = await api<{ tested: boolean; status: string }>(API_ENDPOINTS.admin.providerCredentialTest(id), {
-        method: 'POST',
-      })
-      if (res.success && res.data?.tested && res.data.status === 'success') {
-        setTestResult({ id, success: true, msg: '连通性测试通过' })
-      } else if (res.success && res.data?.status === 'pending') {
-        // The worker is still probing; the row turns final on its own (the
-        // credential list polls while any test is pending).
-        setTestResult({ id, success: true, msg: '测试仍在进行，结果将显示在「最近测试」中' })
-      } else {
-        setTestResult({ id, success: false, msg: res.error?.message || '连通性测试未通过' })
+  async function handleTest(credential: ProviderCredential) {
+    await actions.run(credential.id, credential.displayName, async () => {
+      try {
+        const res = await api<{ tested: boolean; status: string }>(API_ENDPOINTS.admin.providerCredentialTest(credential.id), {
+          method: 'POST',
+        })
+        if (!res.success || (res.data?.status !== 'pending' && !(res.data?.tested && res.data.status === 'success'))) {
+          throw new Error(res.error?.message || '连通性测试未通过')
+        }
+        return res.data
+      } finally {
+        // Even a failed test may stamp the last-test status on the server.
+        await queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
       }
-    } catch {
-      setTestResult({ id, success: false, msg: '测试请求失败' })
-    } finally {
-      setTestingId(null)
-      // The test stamps `lastTestStatus` on the row either way.
-      queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
-    }
+    }, '连通测试请求已完成；最终结果请查看最近测试', 'test')
+  }
+
+  const currentDetailCredential = credentials.find((credential) => credential.id === detailCredential?.id) ?? detailCredential
+  function requestDeleteCredential(credential: ProviderCredential) {
+    setDeleteTarget(credential)
+  }
+  function credentialBusy(credential: ProviderCredential) {
+    return actions.isPending(credential.id) || credential.lastTestStatus === 'pending'
+  }
+  function toggleCredential(credential: ProviderCredential, enabled: boolean) {
+    return actions.run(credential.id, credential.displayName, () => toggleMutation.mutateAsync({ id: credential.id, enabled }), enabled ? '凭据已启用' : '凭据已停用', 'toggle')
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {actionError && (
-        <Alert tone="danger" role="alert" title="凭据操作未完成">
-          {actionError}。请修正后重试；若多次失败，请确认服务端凭据配置后刷新列表。
-        </Alert>
-      )}
+    <div ref={recordListRef} tabIndex={-1} role="region" aria-label="供应商凭据列表" className="flex flex-col gap-3">
+      <AdminActionErrors errors={actions.errors} />
 
-      <Card density="compact" className="gap-0 overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">
-              {variant === 'media' ? '媒体供应商凭据列表' : '语言模型供应商凭据列表'}
-            </caption>
-            <thead className="bg-tonal text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">
-                  凭据名称
-                </th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">
-                  {variant === 'media' ? '来源插件' : '供应商'}
-                </th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">
-                  {variant === 'media' ? '供应商账号' : '关联模型'}
-                </th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">
-                  API Key 状态
-                </th>
-                <th scope="col" className="px-4 py-3 text-sm font-medium">
-                  状态
-                </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-medium">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border" aria-busy={isLoading || undefined}>
-              {isLoading ? (
-                Array.from({ length: 3 }, (_, index) => (
-                  <tr key={index}>
-                    <td className="px-4 py-3"><div className="flex flex-col gap-1"><SkeletonText width="9rem" /><SkeletonText width="11rem" /><SkeletonText width="8rem" /></div></td>
-                    <td className="px-4 py-3"><SkeletonText width="7rem" /></td>
-                    <td className="px-4 py-3"><SkeletonText lines={variant === 'media' ? 2 : 1} width="9rem" /></td>
-                    <td className="px-4 py-3"><SkeletonTile className="aspect-auto h-6 w-24 rounded-pill" /></td>
-                    <td className="px-4 py-3"><div className="flex items-center gap-2"><SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" /><SkeletonText width="3rem" /></div></td>
-                    <td className="px-4 py-3"><div className="flex flex-wrap items-center justify-end gap-2"><SkeletonTile className="aspect-auto h-8 w-20 rounded-control" /><SkeletonTile className="aspect-auto h-8 w-8 rounded-control" /></div></td>
-                  </tr>
-                ))
-              ) : error ? (
-                <tr>
-                  <td colSpan={COLUMN_COUNT}>
-                    <EmptyState
-                      variant="error"
-                      density="compact"
-                      objectName={variant === 'media' ? '媒体凭据' : '语言模型凭据'}
-                      title="无法加载凭据列表"
-                      description={
-                        typeof error === 'string'
-                          ? `${error}。请检查后端服务状态后重试。`
-                          : '加载凭据数据时出现问题，可能是服务暂时不可用。请稍后重试。'
-                      }
-                      action={onRetry ? <Button variant="secondary" onClick={onRetry}>刷新重试</Button> : undefined}
-                    />
-                  </td>
-                </tr>
-              ) : credentials.length > 0 ? (
-                credentials.map((c) => {
-                  const pluginKey = credentialPluginKey(c)
-                  const linked = linkedModels[c.id] || []
-                  const hasSecret = Boolean(c.hasApiKey || c.hasCredential)
-                  return (
-                    <tr
-                      key={c.id}
-                      className="transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover"
-                    >
-                      <td className="px-4 py-3 font-medium text-foreground">
-                        <div>{c.displayName}</div>
-                        {c.baseUrl && (
-                          <div className="break-all font-mono text-xs font-normal text-muted-foreground">{c.baseUrl}</div>
-                        )}
-                        <div className="font-mono text-xs font-normal tabular-nums text-muted-foreground">
-                          最近测试：{TEST_STATUS_LABEL[c.lastTestStatus] || c.lastTestStatus}
-                          {c.lastTestErrorCode ? `（${c.lastTestErrorCode}）` : ''}
-                        </div>
-                      </td>
-                      {variant === 'media' ? (
-                        <td className="px-4 py-3 font-mono text-xs text-foreground">{pluginKey || '-'}</td>
+      <AdminMobileRecords records={credentials} loading={isLoading}
+        error={error ? typeof error === 'string' ? error : '加载凭据失败' : null}
+        onRetry={onRetry} empty={emptyText}
+        title={(credential) => credential.displayName}
+        status={(credential) => <Badge tone={credential.enabled ? 'success' : 'neutral'}>{credential.enabled ? '已启用' : '已停用'}</Badge>}
+        summary={(credential) => <>{credential.providerId || credential.adapter || '—'} · 最近测试：{TEST_STATUS_LABEL[credential.lastTestStatus] || credential.lastTestStatus}</>}
+        onDetails={setDetailCredential}
+      />
+
+      <DataTable cardClassName="hidden md:block" caption={variant === 'media' ? '媒体供应商凭据列表' : '语言模型供应商凭据列表'} columns={6}>
+        <TableHead>
+          <TableHeadCell>凭据名称</TableHeadCell>
+          <TableHeadCell>{variant === 'media' ? '来源插件' : '供应商'}</TableHeadCell>
+          <TableHeadCell>{variant === 'media' ? '供应商账号' : '关联模型'}</TableHeadCell>
+          <TableHeadCell>API Key 状态</TableHeadCell>
+          <TableHeadCell>状态</TableHeadCell>
+          <TableHeadCell align="right">操作</TableHeadCell>
+        </TableHead>
+        <TableBody busy={isLoading}>
+          {isLoading ? (
+            Array.from({ length: 3 }, (_, index) => (
+              <TableSkeletonRow
+                key={index}
+                cells={[
+                  <div key="name" className="flex flex-col gap-1"><SkeletonText width="9rem" /><SkeletonText width="11rem" /><SkeletonText width="8rem" /></div>,
+                  <SkeletonText key="provider" width="7rem" />,
+                  <SkeletonText key="account" lines={variant === 'media' ? 2 : 1} width="9rem" />,
+                  <SkeletonTile key="key" className="aspect-auto h-6 w-24 rounded-pill" />,
+                  <div key="status" className="flex items-center gap-2"><SkeletonTile className="aspect-auto h-5 w-9 rounded-pill" /><SkeletonText width="3rem" /></div>,
+                  { align: 'right', content: <div className="flex flex-wrap items-center justify-end gap-2"><SkeletonTile className="aspect-auto h-8 w-20 rounded-control" /><SkeletonTile className="aspect-auto h-8 w-8 rounded-control" /></div> },
+                ]}
+              />
+            ))
+          ) : error ? (
+            <TableStateRow>
+              <EmptyState
+                variant="error"
+                density="compact"
+                objectName={variant === 'media' ? '媒体凭据' : '语言模型凭据'}
+                title="无法加载凭据列表"
+                description={
+                  typeof error === 'string'
+                    ? `${error}。请检查后端服务状态后重试。`
+                    : '加载凭据数据时出现问题，可能是服务暂时不可用。请稍后重试。'
+                }
+                action={onRetry ? <Button variant="secondary" onClick={onRetry}>刷新重试</Button> : undefined}
+              />
+            </TableStateRow>
+          ) : credentials.length > 0 ? (
+            credentials.map((c) => {
+              const pluginKey = credentialPluginKey(c)
+              const linked = linkedModels[c.id] || []
+              const hasSecret = Boolean(c.hasApiKey || c.hasCredential)
+              return (
+                <TableRow key={c.id}>
+                  <TableCell tone="strong">
+                    <div>{c.displayName}</div>
+                    {c.baseUrl && (
+                      <div className="break-all font-mono text-xs font-normal text-muted-foreground">{c.baseUrl}</div>
+                    )}
+                    <div className="font-mono text-xs font-normal tabular-nums text-muted-foreground">
+                      最近测试：{TEST_STATUS_LABEL[c.lastTestStatus] || c.lastTestStatus}
+                      {c.lastTestErrorCode ? `（${c.lastTestErrorCode}）` : ''}
+                    </div>
+                  </TableCell>
+                  {variant === 'media' ? (
+                    <TableCell mono textSize="xs" tone="foreground">{pluginKey || '-'}</TableCell>
+                  ) : (
+                    <TableCell mono textSize="xs" tone="muted">{c.providerId || c.adapter || '-'}</TableCell>
+                  )}
+                  {variant === 'media' ? (
+                    <TableCell mono textSize="xs" tone="muted">
+                      <div>{c.providerId || '-'}</div>
+                    </TableCell>
+                  ) : (
+                    <TableCell tone="muted">
+                      {linked.length > 0 ? (
+                        <span className="text-foreground">{linked.join('、')}</span>
                       ) : (
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{c.providerId || c.adapter || '-'}</td>
+                        <span>未关联模型</span>
                       )}
-                      {variant === 'media' ? (
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                          <div>{c.providerId || '-'}</div>
-                        </td>
-                      ) : (
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {linked.length > 0 ? (
-                            <span className="text-foreground">{linked.join('、')}</span>
-                          ) : (
-                            <span>未关联模型</span>
-                          )}
-                        </td>
-                      )}
-                      <td className="px-4 py-3">
-                        <Badge tone={hasSecret ? 'success' : 'danger'}>{hasSecret ? '已配置密钥' : '未设置密钥'}</Badge>
-                      </td>
-                      {/* Immediate setting: `Switch` reverts itself when the PATCH rejects,
-                          and the failure message above surfaces the reason. */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={c.enabled}
-                            onCheckedChange={(enabled) => toggleMutation.mutateAsync({ id: c.id, enabled })}
-                            aria-label={`凭据 ${c.displayName} 启用状态`}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            {c.enabled ? '已启用' : '已停用'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          {testResult && testResult.id === c.id && (
-                            <span
-                              className={`text-xs ${testResult.success ? 'text-success' : 'text-danger'}`}
-                              role="status"
-                            >
-                              {testResult.msg}
-                            </span>
-                          )}
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <Badge tone={hasSecret ? 'success' : 'danger'}>{hasSecret ? '已配置密钥' : '未设置密钥'}</Badge>
+                  </TableCell>
+                  {/* Immediate setting: `Switch` reverts itself when the PATCH rejects,
+                      and the failure message above surfaces the reason. */}
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={c.enabled}
+                        disabled={actions.isToggleBlocked(c.id, c.lastTestStatus === 'pending')}
+                        onCheckedChange={(enabled) => toggleCredential(c, enabled)}
+                        aria-label={`凭据 ${c.displayName} 启用状态`}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {c.enabled ? '已启用' : '已停用'}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                           {/* `loading` keeps the label and the measured idle width, so the
                               row never reflows mid-test. */}
                           <Button
                             variant="secondary"
                             size="sm"
-                            loading={testingId === c.id}
-                            onClick={() => handleTest(c.id)}
+                            loading={c.lastTestStatus === 'pending'}
+                            disabled={credentialBusy(c)}
+                            onClick={() => { void handleTest(c).catch(() => {}) }}
                             aria-label={`连通测试凭据 ${c.displayName}`}
                           >
                             连通测试
@@ -264,36 +245,73 @@ export function AdminCredentialTable({
                           <IconButton
                             variant="danger-ghost"
                             size="sm"
-                            onClick={() => {
-                              if (confirm(`确认删除凭据 ${c.displayName}？`)) {
-                                deleteMutation.mutate(c.id)
-                              }
-                            }}
+                            disabled={credentialBusy(c)}
+                            onClick={() => requestDeleteCredential(c)}
                             aria-label={`删除凭据 ${c.displayName}`}
-                            icon={<Trash2 aria-hidden="true" />}
+                            icon={<Trash2 weight="bold" aria-hidden="true" />}
                           />
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })
               ) : (
-                <tr>
-                  <td colSpan={COLUMN_COUNT}>
-                    <EmptyState
-                      variant="first-use"
-                      density="compact"
-                      objectName={variant === 'media' ? '媒体凭据' : '语言模型凭据'}
-                      title={variant === 'media' ? '还没有媒体凭据' : '还没有语言模型凭据'}
-                      description={emptyText}
-                    />
-                  </td>
-                </tr>
+                <TableStateRow>
+                  <EmptyState
+                    variant="first-use"
+                    density="compact"
+                    objectName={variant === 'media' ? '媒体凭据' : '语言模型凭据'}
+                    title={variant === 'media' ? '还没有媒体凭据' : '还没有语言模型凭据'}
+                    description={emptyText}
+                  />
+                </TableStateRow>
               )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+        </TableBody>
+      </DataTable>
+      <AdminRecordDetailDialog open={currentDetailCredential !== null || deleteTarget !== null} onClose={() => { setDetailCredential(null); setDeleteTarget(null) }} title="凭据详情"
+        listFocusRef={recordListRef}
+        confirmation={deleteTarget ? {
+          objectName: `${deleteTarget.displayName}（${deleteTarget.id}）`,
+          impact: (linkedModels[deleteTarget.id]?.length ?? 0) > 0
+            ? `当前关联模型：${linkedModels[deleteTarget.id].join('、')}。删除可能影响这些模型的调用；引用限制由服务端校验。密钥删除后无法恢复。`
+            : '当前列表未发现关联模型；引用限制仍由服务端校验。密钥删除后无法恢复。',
+          pending: actions.isPending(deleteTarget.id),
+          error: actions.errors[deleteTarget.id],
+          cancelLabel: currentDetailCredential ? '返回详情' : '取消',
+          onCancel: () => setDeleteTarget(null),
+          onConfirm: () => {
+            if (!deleteTarget || actions.isPending(deleteTarget.id)) return
+            const target = deleteTarget
+            void actions.run(target.id, target.displayName, () => deleteMutation.mutateAsync(target.id), '凭据已删除', 'delete')
+              .then(() => {
+                setDeleteTarget((current) => current?.id === target.id ? null : current)
+                setDetailCredential((current) => current?.id === target.id ? null : current)
+              }).catch(() => {})
+          },
+        } : undefined}
+        actions={currentDetailCredential && <>
+          <Switch checked={currentDetailCredential.enabled} disabled={actions.isToggleBlocked(currentDetailCredential.id, currentDetailCredential.lastTestStatus === 'pending')}
+            onCheckedChange={(enabled) => toggleCredential(currentDetailCredential, enabled)} aria-label={`凭据 ${currentDetailCredential.displayName} 启用状态`} />
+          <span>启用凭据</span>
+          <Button variant="secondary" loading={currentDetailCredential.lastTestStatus === 'pending'} disabled={credentialBusy(currentDetailCredential)}
+            onClick={() => { void handleTest(currentDetailCredential).catch(() => {}) }}>连通测试</Button>
+        </>}
+        danger={currentDetailCredential && <Button variant="danger-ghost" disabled={credentialBusy(currentDetailCredential)} onClick={() => requestDeleteCredential(currentDetailCredential)}>删除凭据</Button>}>
+        {currentDetailCredential && <>
+          <AdminRecordFields fields={[
+            { label: '凭据名称', value: currentDetailCredential.displayName },
+            { label: '来源插件', value: credentialPluginKey(currentDetailCredential) || '自定义凭据' },
+            { label: '供应商账号', value: currentDetailCredential.providerId || currentDetailCredential.adapter || '—' },
+            { label: 'Base URL', value: <span className="font-mono">{currentDetailCredential.baseUrl || '—'}</span> },
+            { label: '关联模型', value: linkedModels[currentDetailCredential.id]?.join('、') || '未关联模型' },
+            { label: '密钥状态', value: currentDetailCredential.hasApiKey || currentDetailCredential.hasCredential ? '已配置密钥' : '未设置密钥' },
+            { label: '状态', value: currentDetailCredential.enabled ? '已启用' : '已停用' },
+            { label: '最近测试', value: TEST_STATUS_LABEL[currentDetailCredential.lastTestStatus] || currentDetailCredential.lastTestStatus },
+            { label: '最近测试错误代码', value: currentDetailCredential.lastTestErrorCode || '—' },
+          ]} />
+          <AdminActionErrors errors={actions.errors[currentDetailCredential.id] ? { [currentDetailCredential.id]: actions.errors[currentDetailCredential.id] } : {}} />
+        </>}
+      </AdminRecordDetailDialog>
     </div>
   )
 }

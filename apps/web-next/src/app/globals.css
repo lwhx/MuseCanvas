@@ -171,8 +171,8 @@
   /*
    * --- Shadows: the elevation ladder ---
    * soft = a card at rest · floating = a lifted tile · dropdown / toast / modal /
-   * drawer / command = the matching floating surface. `*-sm/md/lg` are temporary
-   * aliases while call sites migrate onto the semantic names.
+   * drawer / command = the matching floating surface. One name per elevation;
+   * there are no t-shirt-size aliases.
    */
   --shadow-soft: 0 4px 20px rgb(0 0 0 / 0.04);
   --shadow-floating: 0 12px 32px rgb(0 0 0 / 0.06);
@@ -181,9 +181,6 @@
   --shadow-modal: 0 16px 48px rgb(0 0 0 / 0.12);
   --shadow-drawer: -4px 0 24px rgb(0 0 0 / 0.06);
   --shadow-command: 0 16px 48px rgb(0 0 0 / 0.14);
-  --shadow-sm: 0 4px 20px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 20px rgb(0 0 0 / 0.04);
-  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.08);
 
   /* --- Control heights (40 is the default; 32 dense toolbars; 48 touch) --- */
   --control-xs: 24px;
@@ -237,6 +234,28 @@
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /*
+   * Motion: what a bare `transition-*` means.
+   *
+   * Tailwind ships `--default-transition-duration: 150ms` and
+   * `cubic-bezier(0.4, 0, 0.2, 1)` — neither is a token in this system. Without
+   * this override, `transition-colors` (no explicit duration) silently runs at a
+   * duration the design system never chose, which is the one form of motion drift
+   * no call site can be blamed for. Pointing the defaults at `--motion-fast` /
+   * `--ease-standard` makes the plain utility the correct one, so `transition-colors`
+   * is always right and `duration-[var(--motion-fast)] ease-[var(--ease-standard)]`
+   * never has to be written by hand again.
+   *
+   * The named easings above are numerically identical to Tailwind's own defaults
+   * (`ease-in` / `ease-out` / `ease-in-out`), so bare uses of those stay correct;
+   * only the *default* pair was off-spec.
+   *
+   * `.motion-*` utilities and `button-variants.ts` declare their durations
+   * explicitly on purpose and are unaffected.
+   */
+  --default-transition-duration: var(--motion-fast);
+  --default-transition-timing-function: var(--ease-standard);
 
   /* --- Elevation stacking (see the ladder in the header comment) --- */
   --z-index-sticky: 10;
@@ -357,9 +376,6 @@ body {
     --shadow-modal: 0 16px 48px rgb(0 0 0 / 0.35);
     --shadow-drawer: -4px 0 24px rgb(0 0 0 / 0.2);
     --shadow-command: 0 16px 48px rgb(0 0 0 / 0.4);
-    --shadow-sm: 0 4px 20px rgb(0 0 0 / 0.15);
-    --shadow-md: 0 4px 20px rgb(0 0 0 / 0.15);
-    --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.25);
 
     --opacity-overlay: 0.55;
     --opacity-ghost-hover: 0.08;
@@ -654,11 +670,14 @@ body {
     animation-fill-mode: backwards;
   }
 
-  /* Press feedback: quick 0.98 dip, nothing more. */
+  /* Press feedback: quick 0.98 dip, plus the hover color fade every pressable
+     control also needs. Both live in one declaration on purpose: a separate
+     `transition-colors` on the same element would overwrite `transition-property`
+     and silently drop one of the two. Never pair this with `transition-*`. */
   .motion-press {
-    transition-property: transform;
-    transition-duration: var(--motion-press);
-    transition-timing-function: var(--ease-in);
+    transition-property: color, background-color, border-color, transform;
+    transition-duration: var(--motion-fast), var(--motion-fast), var(--motion-fast), var(--motion-press);
+    transition-timing-function: var(--ease-standard), var(--ease-standard), var(--ease-standard), var(--ease-in);
   }
 
   .motion-press:active {
@@ -709,7 +728,9 @@ body {
     animation-fill-mode: forwards;
   }
 
-  /* Color-only hover feedback on tiles and rows. Cards never move on hover. */
+  /* Opacity-only hover feedback: tiles and rows fade in, nothing moves and no
+     colour animates here. Pair with `group-hover:opacity-100`. Colour changes are
+     a plain `transition-colors`, which already runs at the token speed. */
   .motion-hover-fade {
     transition-property: opacity, transform;
     transition-duration: var(--motion-fast);
@@ -786,6 +807,23 @@ body {
      Clamped to 8 steps so a long page never ends up waiting on the last cell. */
   .motion-stagger {
     animation-delay: calc(min(var(--stagger-index, 0), 8) * var(--stagger-step));
+  }
+
+  /* Scroll-linked section entrance (see `shared/components/reveal.tsx`). Opt-in
+     twice — motion allowed AND `view()` timelines supported — so the fallback is
+     the static, visible block, never a hidden one. The range is a fixed scroll
+     distance so a tall section is fully opaque long before its end is in view. */
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .motion-scroll-reveal {
+        animation-name: mc-reveal-up;
+        animation-duration: auto;
+        animation-timing-function: var(--ease-out);
+        animation-fill-mode: backwards;
+        animation-timeline: view();
+        animation-range: entry 0% entry 160px;
+      }
+    }
   }
 
   /* Tab underline / position changes glide; nothing is reordered abruptly. */

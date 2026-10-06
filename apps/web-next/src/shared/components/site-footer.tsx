@@ -22,14 +22,14 @@ export function SiteFooter({ current, className }: SiteFooterProps) {
           <img
             src="/brand/musecanvas_flow_ribbon_final_pack/03_transparent_trimmed_png/04_monochrome_logo_transparent_trimmed.png"
             alt="MuseCanvas"
-            className="h-9 sm:h-10 w-auto opacity-90 transition-opacity hover:opacity-100"
+            className="h-9 sm:h-10 w-auto"
           />
         </Link>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
           {current !== 'landing' && (
             <Link
               href="/"
-              className="rounded-control transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:text-foreground"
+              className="rounded-control transition-colors hover:text-foreground"
             >
               首页
             </Link>
@@ -37,7 +37,7 @@ export function SiteFooter({ current, className }: SiteFooterProps) {
           <Link
             href="/terms"
             className={cn(
-              'rounded-control transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:text-foreground',
+              'rounded-control transition-colors hover:text-foreground',
               current === 'terms' && 'font-medium text-foreground',
             )}
           >
@@ -46,7 +46,7 @@ export function SiteFooter({ current, className }: SiteFooterProps) {
           <Link
             href="/privacy"
             className={cn(
-              'rounded-control transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:text-foreground',
+              'rounded-control transition-colors hover:text-foreground',
               current === 'privacy' && 'font-medium text-foreground',
             )}
           >

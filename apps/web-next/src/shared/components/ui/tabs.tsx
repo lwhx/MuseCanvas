@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn'
+import { iconSlot } from './size'
 
 export interface TabItem {
   id: string
@@ -165,8 +166,8 @@ export function Tabs({
               className={cn(
                 'relative inline-flex min-h-[var(--control-md)] shrink-0 select-none items-center gap-2 whitespace-nowrap',
                 'rounded-control px-3 text-sm font-medium',
-                'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
-                '[&>svg]:h-[var(--icon-sm)] [&>svg]:w-[var(--icon-sm)] [&>svg]:shrink-0',
+                'transition-colors',
+                `${iconSlot.sm} [&>svg]:shrink-0`,
                 variant === 'underline'
                   ? selected
                     ? 'text-foreground'

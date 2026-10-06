@@ -454,7 +454,9 @@ export class OpenAiImagePlugin implements MediaProviderPlugin {
     let json: OpenAiResponsePayload
     try {
       json = await response.json<OpenAiResponsePayload>()
-    } catch {
+    } catch (error) {
+      // Body reads can fail after successful headers; preserve transport/safety diagnostics.
+      if (error instanceof NormalizedProviderError) throw error
       return {
         status: 'failed',
         error: NormalizedProviderError.create(

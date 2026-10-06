@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { IconButton, buttonVariants } from './button'
 import type { ButtonSize } from './button'
@@ -88,7 +88,7 @@ export function Pagination({
           aria-label="上一页"
           aria-disabled={page <= 1 || undefined}
           onClick={() => go(page - 1)}
-          icon={<ChevronLeft aria-hidden="true" />}
+          icon={<ChevronLeft weight="bold" aria-hidden="true" />}
         />
 
         {items.map((item) =>
@@ -121,7 +121,7 @@ export function Pagination({
           aria-label="下一页"
           aria-disabled={page >= safePageCount || undefined}
           onClick={() => go(page + 1)}
-          icon={<ChevronRight aria-hidden="true" />}
+          icon={<ChevronRight weight="bold" aria-hidden="true" />}
         />
       </div>
     </nav>

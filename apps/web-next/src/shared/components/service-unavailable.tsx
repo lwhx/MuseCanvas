@@ -17,13 +17,12 @@ export function ServiceUnavailable() {
       <div className="w-full max-w-dialog-narrow rounded-card bg-surface p-8 text-center shadow-soft">
         <h1 className="text-module font-normal">服务暂时不可用</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          无法连接后端服务，可能是服务正在启动或维护中。请稍后重试。
+          暂时无法连接 MuseCanvas 服务，可能正在启动或维护中，请稍后重试。
         </p>
         <button
           type="button"
           onClick={retry}
-          className="mt-6 inline-flex min-h-[var(--control-md)] items-center justify-center rounded-control bg-primary px-4 text-sm font-medium text-on-primary transition-colors hover:bg-primary-hover motion-press"
-          style={{ transitionDuration: 'var(--motion-fast)', transitionTimingFunction: 'var(--ease-standard)' }}
+          className="mt-6 inline-flex min-h-[var(--control-md)] items-center justify-center rounded-control bg-primary px-4 text-sm font-medium text-on-primary hover:bg-primary-hover active:bg-primary-active motion-press"
         >
           刷新重试
         </button>

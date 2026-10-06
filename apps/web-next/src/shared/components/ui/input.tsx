@@ -14,7 +14,7 @@ import { useFormFieldContext } from './field'
  */
 export const controlClasses = [
   'w-full rounded-control border bg-surface px-3 text-sm text-foreground',
-  'transition-[background-color,border-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+  'transition-[background-color,border-color]',
   'placeholder:text-muted-foreground',
   'enabled:hover:border-border-strong',
   'aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft',

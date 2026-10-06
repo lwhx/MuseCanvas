@@ -2,9 +2,10 @@
 
 import { createContext, useContext } from 'react'
 import type { HTMLAttributes, ReactNode, Ref } from 'react'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDownIcon as ArrowDown, ArrowUpIcon as ArrowUp } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { Skeleton } from './skeleton'
+import { iconSize } from './size'
 
 type CardDensity = 'comfortable' | 'compact'
 
@@ -44,7 +45,7 @@ export function Card({ density = 'comfortable', interactive, className, ref, chi
           'flex flex-col rounded-card bg-surface text-foreground shadow-soft',
           densitySpec[density].card,
           interactive &&
-            'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-surface-hover',
+            'transition-colors hover:bg-surface-hover',
           className,
         )}
         {...rest}
@@ -177,7 +178,7 @@ export function StatCard({
               <p className="flex flex-wrap items-center gap-1 text-xs">
                 {hasDelta ? (
                   <span className={cn('inline-flex items-center gap-0.5 font-medium tabular-nums', toneClass)}>
-                    <DeltaIcon aria-hidden="true" className="h-[var(--icon-xs)] w-[var(--icon-xs)]" />
+                    <DeltaIcon weight="bold" aria-hidden="true" className={iconSize.xs} />
                     {positive ? '+' : negative ? '-' : '±'}
                     {Math.abs(delta as number)}
                     {deltaSuffix}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, RefreshCw, XCircle } from 'lucide-react'
+import { CaretRightIcon as ChevronRight, ArrowClockwiseIcon as RefreshCw, XCircleIcon as XCircle } from '@phosphor-icons/react'
 import { JobStatusBadge } from '@/shared/components/job-status-badge'
 import { MediaFrame } from '@/shared/components/media-frame'
 import { Alert, Button, Card, Progress, Skeleton, SkeletonRow, SkeletonTile } from '@/shared/components/ui'
@@ -25,7 +25,9 @@ export interface ActiveJobsBoardProps {
   onRetry: (jobId: string) => void
   pendingCancelId?: string | null
   pendingRetryId?: string | null
-  /** `rail` collapses; `inline` is the <768px copy and stays open. */
+  disabled?: boolean
+  actionErrors?: Record<string, string>
+  /** `rail` collapses; `inline` stays open in the task dialog. */
   variant?: 'rail' | 'inline'
   /** The mobile copy would otherwise park an empty card under the prompt box. */
   hideWhenEmpty?: boolean
@@ -44,6 +46,8 @@ export function ActiveJobsBoard({
   onRetry,
   pendingCancelId,
   pendingRetryId,
+  disabled = false,
+  actionErrors = {},
   variant = 'rail',
   hideWhenEmpty = false,
   open = true,
@@ -136,7 +140,7 @@ export function ActiveJobsBoard({
         aria-controls={listId}
         onClick={() => onToggle?.(!open)}
         className="w-full justify-start px-2 text-left"
-        icon={<ChevronRight aria-hidden="true" className={cn('motion-position', open && 'rotate-90')} />}
+        icon={<ChevronRight weight="bold" aria-hidden="true" className={cn('motion-position', open && 'rotate-90')} />}
       >
         <span>进行中</span>
         {count > 0 && (
@@ -164,7 +168,7 @@ export function ActiveJobsBoard({
               variant="secondary"
               size="sm"
               onClick={onReload}
-              icon={<RefreshCw aria-hidden="true" />}
+              icon={<RefreshCw weight="bold" aria-hidden="true" />}
             >
               重试
             </Button>
@@ -172,7 +176,8 @@ export function ActiveJobsBoard({
         >
           列表刷新失败，请稍后重试。
         </Alert>
-      ) : rows.length === 0 && !open ? null : rows.length === 0 ? (
+      ) : null}
+      {rows.length === 0 && !open ? null : rows.length === 0 ? (
         isLoading ? (
           <div aria-busy="true">
             <span className="sr-only">加载任务中</span>
@@ -218,6 +223,8 @@ export function ActiveJobsBoard({
               onRetry={onRetry}
               pendingCancelId={pendingCancelId}
               pendingRetryId={pendingRetryId}
+              disabled={disabled}
+              actionError={actionErrors[job.id]}
             />
           ))}
         </ul>
@@ -254,6 +261,8 @@ interface ActiveJobRowProps {
   onRetry: (jobId: string) => void
   pendingCancelId?: string | null
   pendingRetryId?: string | null
+  disabled: boolean
+  actionError?: string
 }
 
 function ActiveJobRow({
@@ -266,6 +275,8 @@ function ActiveJobRow({
   onRetry,
   pendingCancelId,
   pendingRetryId,
+  disabled,
+  actionError,
 }: ActiveJobRowProps) {
   const active = isJobActive(job)
   const firstOutput = job.outputs?.[0]
@@ -350,6 +361,7 @@ function ActiveJobRow({
           variant="ghost"
           size="sm"
           onClick={() => onSelectJob(job.id)}
+          disabled={disabled}
           aria-current={selected ? 'true' : undefined}
           className="w-full justify-start whitespace-normal px-2 text-left"
         >
@@ -365,11 +377,11 @@ function ActiveJobRow({
               variant="danger-ghost"
               size="sm"
               onClick={() => onCancel(job.id)}
-              disabled={Boolean(job.cancelRequested)}
+              disabled={disabled || Boolean(job.cancelRequested) || Boolean(pendingCancelId)}
               loading={pendingCancelId === job.id}
               aria-label={`取消任务：${job.prompt.slice(0, 20)}`}
               className="px-2 text-xs"
-              icon={<XCircle aria-hidden="true" />}
+              icon={<XCircle weight="bold" aria-hidden="true" />}
             >
               {job.cancelRequested ? '取消中' : '取消'}
             </Button>
@@ -382,15 +394,17 @@ function ActiveJobRow({
               size="sm"
               onClick={() => onRetry(job.id)}
               loading={pendingRetryId === job.id}
+              disabled={disabled || Boolean(pendingRetryId)}
               aria-label={`重试任务：${job.prompt.slice(0, 20)}`}
               className="px-2 text-xs"
-              icon={<RefreshCw aria-hidden="true" />}
+              icon={<RefreshCw weight="bold" aria-hidden="true" />}
             >
               重试
             </Button>
           )}
         </div>
 
+        {actionError && <p role="alert" className="text-xs text-danger">{actionError}</p>}
         {job.status === 'failed' && job.errorMessage && (
           <p className="line-clamp-1 text-xs text-danger">{job.errorMessage}</p>
         )}

@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react'
-import { CircleSlash, Inbox, Lock, Search, TriangleAlert } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { ProhibitIcon as CircleSlash, TrayIcon as Inbox, LockKeyIcon as Lock, MagnifyingGlassIcon as Search, WarningIcon as TriangleAlert } from '@phosphor-icons/react/ssr'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { Button } from './button'
 import type { ButtonVariant } from './button'
+import { iconSize } from './size'
 
 export type EmptyStateVariant = 'first-use' | 'no-results' | 'no-permission' | 'error' | 'capability-unavailable'
 
 interface Preset {
-  icon: LucideIcon
+  icon: PhosphorIcon
   iconClass: string
   /** Copy.md §5 templates; `name` is the object the user is missing. */
   title: (name: string, keyword?: string) => string
@@ -128,7 +129,7 @@ export function EmptyState({
       )}
     >
       {/* icons.md §3: 48px is the page-level empty-state size. */}
-      <Icon aria-hidden="true" className={cn('h-[var(--icon-2xl)] w-[var(--icon-2xl)]', preset.iconClass)} />
+      <Icon weight="duotone" aria-hidden="true" className={cn(iconSize['2xl'], preset.iconClass)} />
       <div className="flex flex-col gap-1">
         <p className="text-module">{shownTitle}</p>
         <p className="max-w-reading text-sm text-muted-foreground">{shownDescription}</p>

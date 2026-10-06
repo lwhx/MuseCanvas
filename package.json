@@ -7,6 +7,7 @@
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
+    "check:tokens": "node scripts/check-web-tokens.mjs",
     "test": "pnpm -r --if-present test",
     "test:e2e:admin": "node tests/e2e/admin-panel.mjs",
     "prepare:prompt-templates": "node scripts/prepare-prompt-templates.mjs",

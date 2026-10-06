@@ -5,6 +5,7 @@ import { api, ApiError } from '@/shared/services/api'
 import { isJobActive } from '@/shared/lib/job-status'
 import type { CreateGenerationRequest, GenerationJob } from '@/shared/types'
 import { LIBRARY_QUERY_KEY } from './useLibrary'
+import { cacheCreatedJob } from '../lib/created-job-cache'
 
 export const JOBS_QUERY_KEY = ['jobs'] as const
 
@@ -43,9 +44,11 @@ export function useCreateJobMutation() {
       }
       return res.data as GenerationJob
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
-      queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY_KEY })
+    retry: false,
+    onSuccess: async (job) => {
+      await cacheCreatedJob(queryClient, job)
+      void queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
+      void queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY_KEY })
     },
   })
 }

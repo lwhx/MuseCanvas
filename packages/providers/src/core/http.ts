@@ -6,6 +6,12 @@ const DEFAULT_TIMEOUT_MS = 60_000
 const DEFAULT_MAX_BYTES = 50_000_000 // 50 MB
 const MAX_REDIRECTS = 5
 
+// Cancellation closes the reader immediately, but its source acknowledgement may never settle.
+function cancelWithoutWaiting(source: { cancel(reason?: unknown): Promise<void> } | null | undefined, reason?: unknown): void {
+  try { void source?.cancel(reason).catch(() => {}) }
+  catch { /* Keep the original error and still complete cleanup if cancellation throws. */ }
+}
+
 export type SafeHttpClientOptions = {
   pluginId: string
   version: string
@@ -75,89 +81,66 @@ export class DefaultSafeHttpClient implements SafeHttpClient {
     const maxBytes = init.maxBytes ?? DEFAULT_MAX_BYTES
     const method = init.method ?? 'GET'
 
+    const controller = new AbortController()
+    let timedOut = false
+    let cancelBody: (() => void) | undefined
+    const abortError = () => timedOut
+      ? NormalizedProviderError.create(this.pluginId, this.version, 'PROVIDER_TIMEOUT', `Request timed out after ${timeoutMs}ms`)
+      : new DOMException('Request canceled', 'AbortError')
+    const cleanup = () => {
+      clearTimeout(timer)
+      init.signal?.removeEventListener('abort', onExternalAbort)
+      controller.signal.removeEventListener('abort', onAbort)
+    }
+    const onAbort = () => { cancelBody?.(); cleanup() }
+    const onExternalAbort = () => controller.abort()
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
+    controller.signal.addEventListener('abort', onAbort, { once: true })
+    init.signal?.addEventListener('abort', onExternalAbort, { once: true })
+    if (init.signal?.aborted) controller.abort()
+    const checkAbort = () => { if (controller.signal.aborted) throw abortError() }
+    const unsafeRedirect = (detail: string) => new SafeHttpError(
+      NormalizedProviderError.create(this.pluginId, this.version, 'UNSAFE_URL', detail).diagnostic,
+    )
+
     let currentUrl = url
     let redirectsFollowed = 0
-
-    while (true) {
-      const validatedUrl = this.validateUrl(currentUrl, init)
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), timeoutMs)
-      const cleanup = () => clearTimeout(timer)
-
-      let res: Response
-      try {
-        res = await this.fetchImpl(validatedUrl.toString(), {
+    try {
+      while (true) {
+        checkAbort()
+        const validatedUrl = this.validateUrl(currentUrl, init)
+        const res = await this.fetchImpl(validatedUrl.toString(), {
           method,
           headers: init.headers,
           body: init.body as BodyInit | null | undefined,
           redirect: 'manual',
           signal: controller.signal,
         })
-      } catch (err: unknown) {
-        cleanup()
-        const isAbort =
-          (err instanceof Error && err.name === 'AbortError') ||
-          controller.signal.aborted
-        if (isAbort) {
-          throw NormalizedProviderError.create(
-            this.pluginId,
-            this.version,
-            'PROVIDER_TIMEOUT',
-            `Request timed out after ${timeoutMs}ms`,
-          )
-        }
-        const message = err instanceof Error ? err.message : 'Network transport failure'
-        throw NormalizedProviderError.create(
-          this.pluginId,
-          this.version,
-          'PROVIDER_TEMPORARY_ERROR',
-          message,
-        )
-      }
+        cancelBody = () => cancelWithoutWaiting(res.body)
+        if (controller.signal.aborted) { cancelBody(); checkAbort() }
 
-      // Handle redirects manually so every hop is independently allowlisted.
-      if (res.status >= 301 && res.status <= 308) {
-        cleanup()
-        const location = res.headers.get('location')
-        if (!location) {
-          throw new SafeHttpError(
-            NormalizedProviderError.create(
-              this.pluginId,
-              this.version,
-              'UNSAFE_URL',
-              `Redirect with missing Location header from ${currentUrl}`,
-            ).diagnostic,
-          )
+        // Every redirect hop is independently allowlisted; discard its body.
+        if (res.status >= 301 && res.status <= 308) {
+          cancelWithoutWaiting(res.body)
+          checkAbort()
+          const location = res.headers.get('location')
+          if (!location) throw unsafeRedirect('Redirect missing Location')
+          try { currentUrl = new URL(location, validatedUrl).toString() }
+          catch { throw unsafeRedirect('Invalid redirect Location') }
+          if (++redirectsFollowed > MAX_REDIRECTS) throw unsafeRedirect('Exceeded maximum redirect limit')
+          continue
         }
-        let nextUrl: URL
-        try {
-          nextUrl = new URL(location, validatedUrl)
-        } catch {
-          throw new SafeHttpError(
-            NormalizedProviderError.create(
-              this.pluginId,
-              this.version,
-              'UNSAFE_URL',
-              `Redirect Location is not a valid URL: ${location}`,
-            ).diagnostic,
-          )
-        }
-        currentUrl = nextUrl.toString()
-        redirectsFollowed++
-        if (redirectsFollowed > MAX_REDIRECTS) {
-          throw new SafeHttpError(
-            NormalizedProviderError.create(
-              this.pluginId,
-              this.version,
-              'UNSAFE_URL',
-              `Exceeded maximum redirect limit (${MAX_REDIRECTS})`,
-            ).diagnostic,
-          )
-        }
-        continue
+        return this.wrapResponse(res, currentUrl, maxBytes, cleanup, checkAbort, cancel => { cancelBody = cancel })
       }
-
-      return this.wrapResponse(res, currentUrl, maxBytes, cleanup)
+    } catch (err) {
+      cleanup()
+      checkAbort()
+      if (err instanceof NormalizedProviderError) throw err
+      // Legacy clients treat a transport-originated AbortError as a timeout.
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw NormalizedProviderError.create(this.pluginId, this.version, 'PROVIDER_TIMEOUT', `Request timed out after ${timeoutMs}ms`)
+      }
+      throw NormalizedProviderError.create(this.pluginId, this.version, 'PROVIDER_TEMPORARY_ERROR', err instanceof Error ? err.message : 'Network transport failure')
     }
   }
 
@@ -178,73 +161,55 @@ export class DefaultSafeHttpClient implements SafeHttpClient {
     url: string,
     maxBytes: number,
     cleanup: () => void,
+    checkAbort: () => void,
+    setCancelBody: (cancel: () => void) => void,
   ): SafeHttpResponse {
-    const pluginId = this.pluginId
-    const version = this.version
-
     let readStarted = false
     let cachedBuffer: Buffer | null = null
+    const tooLarge = () => new SafeHttpError(NormalizedProviderError.create(
+      this.pluginId, this.version, 'OUTPUT_READ_FAILED', `Response body exceeded maximum allowed size of ${maxBytes} bytes`,
+    ).diagnostic)
+
+    const openReader = () => {
+      if (readStarted) throw new Error('Response stream has already been read')
+      readStarted = true
+      checkAbort()
+      const length = Number(rawResponse.headers.get('content-length'))
+      if (length > maxBytes) {
+        cancelWithoutWaiting(rawResponse.body)
+        cleanup()
+        throw tooLarge()
+      }
+      const reader = rawResponse.body?.getReader()
+      setCancelBody(() => cancelWithoutWaiting(reader))
+      return reader
+    }
 
     const readBoundedBuffer = async (): Promise<Buffer> => {
       if (cachedBuffer) return cachedBuffer
-      if (readStarted) {
-        throw new Error('Response stream has already been read')
-      }
-      readStarted = true
-
-      const contentLengthHeader = rawResponse.headers.get('content-length')
-      if (contentLengthHeader) {
-        const parsed = parseInt(contentLengthHeader, 10)
-        if (!Number.isNaN(parsed) && parsed > maxBytes) {
-          cleanup()
-          throw new SafeHttpError(
-            NormalizedProviderError.create(
-              pluginId,
-              version,
-              'OUTPUT_READ_FAILED',
-              `Content-Length ${parsed} exceeds limit of ${maxBytes} bytes`,
-            ).diagnostic,
-          )
-        }
-      }
-
-      if (!rawResponse.body) {
-        cleanup()
-        cachedBuffer = Buffer.alloc(0)
-        return cachedBuffer
-      }
-
-      const reader = rawResponse.body.getReader()
+      const reader = openReader()
       const chunks: Uint8Array[] = []
       let totalBytes = 0
-
       try {
-        while (true) {
+        if (reader) while (true) {
+          checkAbort()
           const { done, value } = await reader.read()
+          checkAbort()
           if (done) break
-          if (value) {
-            totalBytes += value.byteLength
-            if (totalBytes > maxBytes) {
-              await reader.cancel()
-              throw new SafeHttpError(
-                NormalizedProviderError.create(
-                  pluginId,
-                  version,
-                  'OUTPUT_READ_FAILED',
-                  `Response body exceeded maximum allowed size of ${maxBytes} bytes`,
-                ).diagnostic,
-              )
-            }
-            chunks.push(value)
-          }
+          totalBytes += value.byteLength
+          if (totalBytes > maxBytes) throw tooLarge()
+          chunks.push(value)
         }
+        cachedBuffer = Buffer.concat(chunks, totalBytes)
+        return cachedBuffer
+      } catch (error) {
+        cancelWithoutWaiting(reader)
+        checkAbort()
+        throw error
       } finally {
         cleanup()
-        reader.releaseLock()
+        reader?.releaseLock()
       }
-
-      cachedBuffer = Buffer.concat(chunks, totalBytes)
-      return cachedBuffer
     }
 
     return {
@@ -253,74 +218,40 @@ export class DefaultSafeHttpClient implements SafeHttpClient {
       headers: rawResponse.headers,
       ok: rawResponse.ok,
       url,
-      text: async () => {
-        const buf = await readBoundedBuffer()
-        return buf.toString('utf8')
-      },
-      json: async <T = unknown>() => {
-        const buf = await readBoundedBuffer()
-        return JSON.parse(buf.toString('utf8')) as T
-      },
-      buffer: () => readBoundedBuffer(),
+      text: async () => (await readBoundedBuffer()).toString('utf8'),
+      json: async <T = unknown>() => JSON.parse((await readBoundedBuffer()).toString('utf8')) as T,
+      buffer: readBoundedBuffer,
       stream: () => {
-        if (readStarted) {
-          throw new Error('Response stream has already been read')
-        }
-        readStarted = true
-        const contentLengthHeader = rawResponse.headers.get('content-length')
-        if (contentLengthHeader) {
-          const parsed = parseInt(contentLengthHeader, 10)
-          if (!Number.isNaN(parsed) && parsed > maxBytes) {
-            cleanup()
-            throw new SafeHttpError(
-              NormalizedProviderError.create(
-                pluginId,
-                version,
-                'OUTPUT_READ_FAILED',
-                `Content-Length ${parsed} exceeds limit of ${maxBytes} bytes`,
-              ).diagnostic,
-            )
-          }
-        }
-        if (!rawResponse.body) {
-          cleanup()
-          return new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.close()
-            },
-          })
-        }
+        const reader = openReader()
         let totalBytes = 0
-        const streamReader = rawResponse.body.getReader()
+        let finished = false
+        const finish = () => {
+          if (finished) return
+          finished = true
+          cleanup()
+          reader?.releaseLock()
+        }
         return new ReadableStream<Uint8Array>({
           async pull(controller) {
-            const { done, value } = await streamReader.read()
-            if (done) {
-              cleanup()
-              controller.close()
-              return
-            }
-            if (value) {
-              totalBytes += value.byteLength
-              if (totalBytes > maxBytes) {
-                controller.error(
-                  new SafeHttpError(
-                    NormalizedProviderError.create(
-                      pluginId,
-                      version,
-                      'OUTPUT_READ_FAILED',
-                      `Stream exceeded maximum allowed size of ${maxBytes} bytes`,
-                    ).diagnostic,
-                  ),
-                )
-                return
-              }
-              controller.enqueue(value)
+            try {
+              checkAbort()
+              const next = reader ? await reader.read() : { done: true, value: undefined }
+              if (finished) return
+              checkAbort()
+              if (next.done) { finish(); controller.close(); return }
+              totalBytes += next.value!.byteLength
+              if (totalBytes > maxBytes) throw tooLarge()
+              controller.enqueue(next.value!)
+            } catch (error) {
+              if (finished) return
+              cancelWithoutWaiting(reader)
+              finish()
+              controller.error(error)
             }
           },
           cancel(reason) {
-            cleanup()
-            return streamReader.cancel(reason)
+            cancelWithoutWaiting(reader, reason)
+            finish()
           },
         })
       },

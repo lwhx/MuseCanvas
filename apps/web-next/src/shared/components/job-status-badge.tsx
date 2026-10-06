@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
+import { CircleNotchIcon as Loader2 } from '@phosphor-icons/react'
 import { jobStatusMeta } from '@/shared/lib/job-status'
 import { cn } from '@/shared/lib/cn'
 import type { JobStatus } from '@/shared/types'
@@ -24,7 +24,7 @@ export function JobStatusBadge({ status, busy = false }: { status: JobStatus; bu
       )}
     >
       {busy ? (
-        <Loader2 className="h-3 w-3 motion-spin" aria-hidden="true" />
+        <Loader2 weight="bold" className="h-3 w-3 motion-spin" aria-hidden="true" />
       ) : (
         <span className={cn('h-2 w-2 shrink-0 rounded-pill', meta.dot)} aria-hidden="true" />
       )}

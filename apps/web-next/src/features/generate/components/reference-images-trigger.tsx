@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ImagePlus } from 'lucide-react'
+import { ImagesIcon as ImagePlus } from '@phosphor-icons/react'
 import { Button } from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
 import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
@@ -36,6 +36,9 @@ export function ReferenceImagesTrigger({
   const frameMode = usesFrameSlots(plan)
   const noun = frameMode ? '输入画面' : '参考图'
   const uploading = stagedImages.find((image) => image.status === 'uploading')
+  const pending = stagedImages.some((image) => image.status === 'pending')
+  const processing = stagedImages.some((image) => image.status === 'processing')
+  const preparing = useGenerateUiStore((s) => s.isPreparingReferences)
   const failed = stagedImages.some((image) => image.status === 'error')
   const count = stagedImages.length
 
@@ -44,12 +47,16 @@ export function ReferenceImagesTrigger({
     if (!isOpen && hasOpened.current) buttonRef.current?.focus()
   }, [isOpen])
 
+  useEffect(() => { if (disabled) setIsOpen(false) }, [disabled])
+
   function openPanel() {
+    if (disabled || useGenerateUiStore.getState().isGenerating) return
     hasOpened.current = true
     setIsOpen(true)
   }
 
-  const counter = uploading ? `${uploading.progress}%` : `${count}/${maxInputs}`
+  const counter = `${count}/${maxInputs}`
+  const status = failed ? '上传失败' : preparing || processing ? '校验中' : uploading ? `上传中 ${uploading.progress}%` : pending ? '排队中' : count > 0 ? '已就绪' : maxInputs === 0 ? '模型不支持' : '未添加'
 
   return (
     <>
@@ -61,14 +68,14 @@ export function ReferenceImagesTrigger({
         onClick={openPanel}
         disabled={disabled}
         aria-label={
-          count > 0 ? `${noun}，已添加 ${count} 张，最多 ${maxInputs} 张` : `添加${noun}`
+          `${noun}，已添加 ${count} 张，最多 ${maxInputs} 张，${status}`
         }
         className={cn(
           'border gap-1.5 px-2.5',
           failed ? 'border-danger text-danger' : count > 0 ? 'border-border-control bg-tonal-selected' : 'border-border-control',
         )}
         icon={
-          <ImagePlus
+          <ImagePlus weight="bold"
             aria-hidden="true"
             className={maxInputs > 0 ? 'text-primary' : 'text-muted-foreground'}
           />
@@ -85,10 +92,12 @@ export function ReferenceImagesTrigger({
           />
         ))}
         <span className="font-mono text-xs tabular-nums text-muted-foreground">{counter}</span>
+        <span className="text-xs">{status}</span>
       </Button>
 
       <ReferenceImagesDialog
-        open={isOpen}
+        open={isOpen && !disabled}
+        disabled={disabled}
         model={model}
         plan={plan}
         onClose={() => setIsOpen(false)}

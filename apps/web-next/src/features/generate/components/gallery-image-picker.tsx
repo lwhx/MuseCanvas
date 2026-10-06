@@ -1,9 +1,22 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, RefreshCw, Search } from 'lucide-react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState } from 'react'
+import { CheckIcon as Check,
+  ArrowClockwiseIcon as RefreshCw,
+  MagnifyingGlassIcon as Search } from '@phosphor-icons/react'
 import { MediaFrame } from '@/shared/components/media-frame'
-import { Alert, Button, Dialog, EmptyState, Input, SkeletonTile } from '@/shared/components/ui'
+import { Alert,
+  Button,
+  Dialog,
+  EmptyState,
+  Input,
+  SkeletonTile,
+  iconSize,
+} from '@/shared/components/ui'
 import { libraryPageItems, useLibraryInfiniteQuery } from '@/shared/hooks/useLibrary'
 import { api } from '@/shared/services/api'
 import { isReferenceEligibleAsset } from '@/shared/lib/reference-upload'
@@ -132,7 +145,7 @@ export function GalleryImagePicker({
               variant="primary"
               onClick={confirm}
               disabled={!selected}
-              icon={<Check aria-hidden="true" />}
+              icon={<Check weight="bold" aria-hidden="true" />}
             >
               使用此图片
             </Button>
@@ -150,9 +163,9 @@ export function GalleryImagePicker({
 
       <label className="relative flex items-center">
         <span className="sr-only">按提示词搜索图库图片</span>
-        <Search
+        <Search weight="bold"
           aria-hidden="true"
-          className="pointer-events-none absolute left-3 h-[var(--icon-sm)] w-[var(--icon-sm)] text-muted-foreground"
+          className={`pointer-events-none absolute left-3 ${iconSize.sm} text-muted-foreground`}
         />
         <Input
           type="search"
@@ -183,7 +196,7 @@ export function GalleryImagePicker({
               variant="secondary"
               size="sm"
               onClick={() => void refetch()}
-              icon={<RefreshCw aria-hidden="true" />}
+              icon={<RefreshCw weight="bold" aria-hidden="true" />}
             >
               重试
             </Button>
@@ -237,7 +250,6 @@ export function GalleryImagePicker({
                   onClick={() => setSelectedId(isSelected ? null : asset.id)}
                   className={cn(
                     'relative block w-full overflow-hidden rounded-control transition-colors',
-                    'duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
                     // Selection is ink, never brand green: the ring plus the filled
                     // check are the same signal a 3px primary bar carries elsewhere.
                     isSelected
@@ -266,7 +278,7 @@ export function GalleryImagePicker({
                         : 'border-border-control bg-surface',
                     )}
                   >
-                    {isSelected ? <Check className="h-[var(--icon-xs)] w-[var(--icon-xs)]" /> : null}
+                    {isSelected ? <Check weight="fill" className={iconSize.xs} /> : null}
                   </span>
                   {reason ? (
                     <span className="media-scrim absolute inset-x-0 bottom-0 px-2 py-1 text-center text-xs leading-[1.5] text-foreground-inverse">
@@ -287,7 +299,7 @@ export function GalleryImagePicker({
             size="sm"
             onClick={() => void fetchNextPage()}
             loading={isFetchingNextPage}
-            icon={<RefreshCw aria-hidden="true" />}
+            icon={<RefreshCw weight="bold" aria-hidden="true" />}
           >
             加载更多
           </Button>

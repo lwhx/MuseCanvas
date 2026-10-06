@@ -12,6 +12,9 @@ import { deleteModel, upsertModel } from '../modules/models/handlers'
 import { cancelJob, deleteJob, getJob, listJobs, retryJob } from '../modules/jobs/handlers'
 import { deleteAsset, downloadAsset, listLibrary } from '../modules/library/handlers'
 import { createGeneration } from '../modules/generations/create'
+import { listCanvases, createCanvas, getCanvas, updateCanvas, deleteCanvas } from '../modules/canvases/handlers'
+import { postCanvasAgentMessages, getCanvasAgentHistory, postCanvasAgentConfirm } from '../modules/canvas-agent'
+import { readCanvasAgentSettings, updateCanvasAgentSettings } from '../modules/admin/canvas-agent-settings'
 import { editImage } from '../modules/image-edit/handlers'
 import {
   completeGenerationUpload,
@@ -27,6 +30,9 @@ import { listInstalledCatalogPlugins, listModelPresets } from '../modules/admin/
 import { buildBuiltinProviderTemplates } from '../admin/provider-templates'
 import {
   deletePlugin,
+  downloadPluginPackage,
+  getPluginDocs,
+  getPluginIcon,
   installPlugin,
   listAdminPlugins,
   updatePluginStatus,
@@ -103,6 +109,9 @@ export const GET_ROUTES: Route[] = [
   // The model catalog is behind the session gate: it was in the old handler too,
   // after the global gate and before any admin route.
   { path: 'models', access: 'actor', handler: () => listPublicModels() },
+  { path: 'canvases', access: 'actor', handler: context => listCanvases(context) },
+  { path: 'canvases/:id', access: 'actor', handler: context => getCanvas(context) },
+  { path: 'canvases/:id/agent/history', access: 'actor', handler: context => getCanvasAgentHistory(context) },
   { path: 'jobs', access: 'actor', handler: context => listJobs(context) },
   { path: 'jobs/:id', access: 'actor', handler: context => getJob(context) },
   { path: 'library', access: 'actor', handler: context => listLibrary(context) },
@@ -115,12 +124,18 @@ export const GET_ROUTES: Route[] = [
   { path: 'admin/model-presets', access: 'admin', handler: async () => ok(await listModelPresets()) },
   { path: 'admin/provider-templates', access: 'admin', handler: async () => ok({ templates: buildBuiltinProviderTemplates(await listInstalledCatalogPlugins()) }) },
   { path: 'admin/plugins', access: 'admin', handler: () => listAdminPlugins() },
+  // Binary responses (image / zip attachment) for zip-packaged plugins; 404 for legacy rows.
+  { path: 'admin/plugins/:hexid/icon', access: 'admin', handler: context => getPluginIcon(context.params.hexid) },
+  { path: 'admin/plugins/:hexid/package', access: 'admin', handler: context => downloadPluginPackage(context.params.hexid) },
+  // README / CHANGELOG / LICENSE text, kept out of the list payload; all-null for legacy rows.
+  { path: 'admin/plugins/:hexid/docs', access: 'admin', handler: context => getPluginDocs(context.params.hexid) },
   { path: 'admin/models', access: 'admin', handler: () => listAdminModels() },
   { path: 'admin/prompt-templates', access: 'admin', handler: () => getAdminPromptTemplates() },
   { path: 'admin/prompt-templates/sets', access: 'admin', handler: () => listPromptTemplateSets() },
   { path: 'admin/prompt-templates/export', access: 'admin', handler: context => exportPromptTemplates(context.request.nextUrl.searchParams.get('setId') || undefined) },
   { path: 'admin/prompt-templates/sets/:hexid', access: 'admin', handler: context => getPromptTemplateSetDetail(context.params.hexid) },
   { path: 'admin/prompt-optimization-settings', access: 'admin', handler: () => readPromptOptimizationSettings() },
+  { path: 'admin/canvas-agent-settings', access: 'admin', handler: () => readCanvasAgentSettings() },
   { path: 'admin/jobs', access: 'admin', handler: context => listAdminJobs(context) },
   { path: 'admin/invitations', access: 'admin', handler: () => listInvitations() },
   { path: 'admin/oauth-providers', access: 'admin', handler: async () => ok(await adminOAuthSettings()) },
@@ -145,6 +160,9 @@ export const POST_ROUTES: Route[] = [
   { path: 'generation-uploads', access: 'actor', handler: async context => createGenerationUpload(context.actor, await context.json()) },
   { path: 'generation-uploads/:id/complete', access: 'actor', handler: context => completeGenerationUpload(context.actor, context.params.id) },
   { path: 'generations', access: 'actor', handler: context => createGeneration(context) },
+  { path: 'canvases', access: 'actor', handler: context => createCanvas(context) },
+  { path: 'canvases/:id/agent/messages', access: 'actor', handler: context => postCanvasAgentMessages(context) },
+  { path: 'canvases/:id/agent/confirm', access: 'actor', handler: context => postCanvasAgentConfirm(context) },
   // Multipart like the plugin uploads above, and it never calls `context.json()`:
   // the source image and the mask arrive as file parts.
   { path: 'images/edit', access: 'actor', handler: context => editImage(context) },
@@ -163,6 +181,8 @@ export const POST_ROUTES: Route[] = [
 ]
 
 export const PATCH_ROUTES: Route[] = [
+  { path: 'canvases/:id', access: 'actor', handler: context => updateCanvas(context) },
+  { path: 'admin/canvas-agent-settings', access: 'admin', handler: async context => updateCanvasAgentSettings(context.actor, await context.json()) },
   { path: 'admin/registration', access: 'admin', handler: context => setRegistrationMode(context) },
   { path: 'admin/prompt-optimization-settings', access: 'admin', handler: async context => updatePromptOptimizationSettings(context.actor, await context.json()) },
   // The old single regex accepted both the bare id and the `/status` alias. Two
@@ -178,6 +198,7 @@ export const PATCH_ROUTES: Route[] = [
 ]
 
 export const DELETE_ROUTES: Route[] = [
+  { path: 'canvases/:id', access: 'actor', handler: context => deleteCanvas(context) },
   { path: 'generation-uploads/:id', access: 'actor', handler: context => deleteGenerationUpload(context.actor, context.params.id) },
   { path: 'jobs/:id', access: 'actor', handler: context => deleteJob(context) },
   { path: 'library/:id', access: 'actor', handler: context => deleteAsset(context) },

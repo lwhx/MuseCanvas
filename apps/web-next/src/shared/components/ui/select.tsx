@@ -2,11 +2,12 @@
 
 import { useId } from 'react'
 import type { ReactNode, Ref, SelectHTMLAttributes } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { CaretDownIcon as ChevronDown } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { useFormFieldContext } from './field'
 import { controlClasses, controlHeight, controlSurface } from './input'
 import type { ControlSize, ControlVariant } from './input'
+import { iconSize } from './size'
 
 export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   variant?: ControlVariant
@@ -75,9 +76,9 @@ export function Select({
       >
         {children}
       </select>
-      <ChevronDown
+      <ChevronDown weight="bold"
         aria-hidden="true"
-        className="pointer-events-none absolute right-3 h-[var(--icon-sm)] w-[var(--icon-sm)] text-muted-foreground"
+        className={`pointer-events-none absolute right-3 ${iconSize.sm} text-muted-foreground`}
       />
     </span>
   )

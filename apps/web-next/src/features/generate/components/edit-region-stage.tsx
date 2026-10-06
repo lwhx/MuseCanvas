@@ -10,8 +10,14 @@
 // lives in `@musecanvas/contracts`, where it is unit-tested; this file only
 // decides when to call it and where to paint the result.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState } from 'react'
+import type { CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent } from 'react'
 import {
   MIN_EDIT_SELECTION_PX,
   clampEditSelection,
@@ -20,10 +26,16 @@ import {
   imageSelectionToDisplaySelection,
   isPointInsideRenderBox,
   visibleImageBox,
-} from '@musecanvas/contracts'
-import type { DisplayRect, EditSelection, Point, RenderBox } from '@musecanvas/contracts'
-import { Eraser, ImageOff } from 'lucide-react'
-import { Button } from '@/shared/components/ui'
+  } from '@musecanvas/contracts'
+import type { DisplayRect,
+  EditSelection,
+  Point,
+  RenderBox } from '@musecanvas/contracts'
+import { EraserIcon as Eraser,
+  ImageBrokenIcon as ImageOff } from '@phosphor-icons/react'
+import { Button,
+  iconSize,
+} from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
 import { stageAspectRatio } from '@/shared/components/media-frame'
 
@@ -349,7 +361,7 @@ export function EditRegionStage({
           // lives in the status line below, which is also the live region — the
           // same split `media-frame.tsx` uses for a dead preview.
           <span className="absolute inset-0 flex items-center justify-center">
-            <ImageOff aria-hidden="true" className="h-[var(--icon-md)] w-[var(--icon-md)] text-decorative-muted" />
+            <ImageOff weight="duotone" aria-hidden="true" className={`${iconSize.md} text-decorative-muted`} />
           </span>
         ) : null}
       </div>
@@ -371,7 +383,7 @@ export function EditRegionStage({
           size="sm"
           onClick={() => onSelectionChange(null)}
           disabled={!selection}
-          icon={<Eraser aria-hidden="true" />}
+          icon={<Eraser weight="bold" aria-hidden="true" />}
         >
           清除选区
         </Button>

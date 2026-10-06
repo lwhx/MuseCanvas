@@ -3,6 +3,7 @@ import { db, transaction } from '../../../../packages/database/src/index'
 import { dispatchOutbox } from '../queue'
 import { getStorageClient } from '../shared/storage'
 import { resolveUploadSignTtlSeconds } from '../shared/runtime'
+import { purgeCanvasContentForActor } from './canvas-cleanup'
 
 const DUE_POLL_LIMIT = 50
 const CANCEL_SCAN_LIMIT = 50
@@ -105,6 +106,7 @@ export async function maintenance() {
         } catch {}
       }
       await transaction(async client => {
+        await purgeCanvasContentForActor(client, String(deletion.user_id))
         await client.query('UPDATE assets SET deleted_at=COALESCE(deleted_at,now()),prompt=NULL WHERE created_by=$1', [deletion.user_id])
         await client.query('UPDATE generation_jobs SET deleted_at=COALESCE(deleted_at,now()),prompt=NULL WHERE created_by=$1', [deletion.user_id])
         await client.query("UPDATE prompt_optimizations SET deleted_at=COALESCE(deleted_at,now()),input_prompt='',final_prompt=NULL,template_instruction_snapshot=NULL WHERE created_by=$1", [deletion.user_id])

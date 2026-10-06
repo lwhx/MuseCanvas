@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { API_ENDPOINTS, type OAuthProviderName } from '@musecanvas/contracts'
+import {
+  useState } from 'react'
+import { useMutation,
+  useQuery,
+  useQueryClient } from '@tanstack/react-query'
+import { API_ENDPOINTS,
+  type OAuthProviderName } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
-import type { OAuthIdentity, OAuthProvider, UserProfile } from '@/shared/types'
+import type { OAuthIdentity,
+  OAuthProvider,
+  UserProfile } from '@/shared/types'
 import {
   Badge,
   Button,
@@ -22,17 +28,19 @@ import {
   SkeletonText,
   buttonVariants,
   useToast,
+  iconSize,
 } from '@/shared/components/ui'
 import { GithubIcon, GoogleIcon } from '@/shared/components/brand-icons'
+import { formatDate } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/cn'
 import {
-  Calendar,
-  Link2,
-  Mail,
-  ShieldCheck,
-  Unlink,
-  X,
-} from 'lucide-react'
+  CalendarIcon as Calendar,
+  LinkSimpleIcon as Link2,
+  EnvelopeSimpleIcon as Mail,
+  ShieldCheckIcon as ShieldCheck,
+  LinkSimpleBreakIcon as Unlink,
+  XIcon as X,
+} from '@phosphor-icons/react'
 
 /** The two providers this page can offer, in display order. */
 const PROVIDERS: { name: OAuthProviderName; label: string }[] = [
@@ -67,15 +75,6 @@ class AccountRequestError extends Error {
 function isPermissionFailure(error: unknown): boolean {
   const code = error instanceof AccountRequestError ? error.code : ''
   return /FORBIDDEN|UNAUTHORIZED|ACCOUNT_UNAVAILABLE|CSRF_REJECTED|HTTP_40[13]/.test(code)
-}
-
-/** `YYYY-MM-DD` (copy.md §9). */
-function formatDate(value: string | undefined): string {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 export function AccountView() {
@@ -248,7 +247,7 @@ export function AccountView() {
                       aria-current={current ? 'true' : undefined}
                       onClick={() => setActiveSection(item.id)}
                       className={cn(
-                        'relative rounded-control py-2 pr-3 pl-5 text-sm transition-colors duration-[var(--motion-fast)]',
+                        'relative rounded-control py-2 pr-3 pl-5 text-sm transition-colors',
                         current
                           ? 'bg-tonal-selected font-medium text-foreground'
                           : 'text-muted-foreground hover:bg-tonal-hover hover:text-foreground',
@@ -287,7 +286,7 @@ export function AccountView() {
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-busy>
                         {[0, 1, 2].map((slot) => (
                           <div key={slot} className="flex min-w-0 items-start gap-3">
-                            <Skeleton className="mt-1 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0" />
+                            <Skeleton className={`mt-1 ${iconSize.sm} shrink-0`} />
                             <div className="flex min-w-0 flex-1 flex-col gap-1">
                               <SkeletonText lines={1} width="42%" />
                               <SkeletonText lines={1} width={slot === 1 ? '58%' : '72%'} />
@@ -299,7 +298,7 @@ export function AccountView() {
                     ) : (
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                         <div className="flex items-start gap-3">
-                          <Mail aria-hidden="true" className="mt-1 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0 text-muted-foreground" />
+                          <Mail weight="bold" aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
                           <div className="flex min-w-0 flex-col gap-1">
                             <p className="text-xs text-muted-foreground">登录邮箱</p>
                             <p className="truncate text-sm text-foreground">{userProfile?.email || '—'}</p>
@@ -307,7 +306,7 @@ export function AccountView() {
                         </div>
 
                         <div className="flex items-start gap-3">
-                          <ShieldCheck aria-hidden="true" className="mt-1 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0 text-muted-foreground" />
+                          <ShieldCheck weight="bold" aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
                           <div className="flex min-w-0 flex-col gap-1">
                             <p className="text-xs text-muted-foreground">账户权限</p>
                             <p className="text-sm text-foreground">
@@ -321,7 +320,7 @@ export function AccountView() {
                         </div>
 
                         <div className="flex items-start gap-3">
-                          <Calendar aria-hidden="true" className="mt-1 h-[var(--icon-sm)] w-[var(--icon-sm)] shrink-0 text-muted-foreground" />
+                          <Calendar weight="bold" aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
                           <div className="flex min-w-0 flex-col gap-1">
                             <p className="text-xs text-muted-foreground">注册时间</p>
                             <p className="font-mono text-sm tabular-nums text-foreground">
@@ -422,7 +421,7 @@ export function AccountView() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    icon={<X aria-hidden="true" />}
+                                    icon={<X weight="bold" aria-hidden="true" />}
                                     onClick={() => toggleStaged(provider.name)}
                                   >
                                     取消解除
@@ -431,7 +430,7 @@ export function AccountView() {
                                   <Button
                                     variant="danger-ghost"
                                     size="sm"
-                                    icon={<Unlink aria-hidden="true" />}
+                                    icon={<Unlink weight="bold" aria-hidden="true" />}
                                     onClick={() => toggleStaged(provider.name)}
                                   >
                                     解除绑定
@@ -444,7 +443,7 @@ export function AccountView() {
                                   href={API_ENDPOINTS.account.oauthLinkStart(provider.name)}
                                   className={buttonVariants({ variant: 'secondary', size: 'sm' })}
                                 >
-                                  <Link2 aria-hidden="true" />
+                                  <Link2 weight="bold" aria-hidden="true" />
                                   绑定账号
                                 </a>
                               )}

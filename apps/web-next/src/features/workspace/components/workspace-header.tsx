@@ -1,17 +1,33 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { LogOut, Menu, Settings, X } from 'lucide-react'
-import type { GenerateModeTab, User } from '@/shared/types'
+import { usePathname,
+  useRouter } from 'next/navigation'
+import { SignOutIcon as LogOut,
+  ListIcon as Menu,
+  GearSixIcon as Settings,
+  XIcon as X } from '@phosphor-icons/react'
+import type { GenerateModeTab,
+  User } from '@/shared/types'
 import { useLogout } from '@/shared/hooks/useAuth'
 import { useDialog } from '@/shared/hooks/useDialog'
 import { useGenerationMode } from '@/shared/hooks/useGenerationMode'
+import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import { GENERATE_ROUTE } from '@/shared/lib/app-routes'
 import { cn } from '@/shared/lib/cn'
-import { Avatar, DropdownMenu, IconButton, ThemeToggle, buttonVariants } from '@/shared/components/ui'
+import { Avatar,
+  DropdownMenu,
+  IconButton,
+  ThemeToggle,
+  buttonVariants,
+  controlSquare,
+  iconSize,
+} from '@/shared/components/ui'
 import { ACCOUNT_ROUTE, ADMIN_ROUTE, navLabelFor, resolveActiveNavKey, workspaceNavItems } from '../lib/workspace-nav'
 
 interface WorkspaceHeaderProps {
@@ -36,8 +52,8 @@ const SCRIM_BACKGROUND = 'color-mix(in srgb, var(--color-overlay) calc(var(--opa
 const navItemClass = (isActive: boolean) =>
   cn(
     'relative flex min-h-[var(--control-md)] items-center gap-2 rounded-control px-3 text-sm font-medium',
-    'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
-    isActive ? 'bg-tonal-selected text-foreground' : 'text-muted-foreground hover:bg-tonal hover:text-foreground',
+    'transition-colors',
+    isActive ? 'bg-tonal-selected text-foreground' : 'text-muted-foreground hover:bg-tonal-hover hover:text-foreground active:bg-tonal-active',
   )
 
 /** `orientation` follows the nav: the desktop bar underlines, the drawer rules on the left. */
@@ -65,6 +81,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
     dialogProps: drawerDialogProps,
   } = useDialog({ open: drawerOpen, onClose: closeDrawer })
   const { mode, selectMode } = useGenerationMode()
+  const submissionBusy = useGenerateUiStore((state) => state.isGenerating)
 
   const logoutMutation = useLogout()
 
@@ -99,6 +116,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
 
   /** Mode entries also close the drawer; the route entries do it on their Link. */
   function handleModeSelect(next: GenerateModeTab) {
+    if (useGenerateUiStore.getState().isGenerating) return
     closeDrawer()
     selectMode(next)
   }
@@ -142,12 +160,14 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                 <button
                   key={item.key}
                   type="button"
+                  disabled={submissionBusy}
+                  title={submissionBusy ? '正在提交，请稍候再切换模式' : undefined}
                   onClick={() => handleModeSelect(item.mode)}
                   aria-current={isActive ? 'page' : undefined}
                   className={navItemClass(isActive)}
                 >
                   {isActive ? <span aria-hidden="true" className={activeBarClass(true)} /> : null}
-                  <Icon className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
+                  <Icon weight="duotone" className={iconSize.sm} aria-hidden="true" />
                   {item.label}
                 </button>
               )
@@ -177,7 +197,8 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
               triggerLabel={`账户菜单：${initialUser.email || '当前用户'}`}
               trigger={<Avatar size="md" initial={userInitial} surface="transparent" />}
               triggerClassName={cn(
-                'h-[var(--control-md)] w-[var(--control-md)] text-sm font-medium text-foreground',
+                controlSquare.md,
+                'text-sm font-medium text-foreground',
                 menuOpen ? 'bg-tonal-selected' : 'bg-tonal hover:bg-tonal-hover active:bg-tonal-active',
               )}
               menuLabel="账户菜单"
@@ -185,11 +206,11 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                 <p className="truncate px-3 py-2 text-xs text-muted-foreground">{initialUser.email}</p>
               }
               items={[
-                { id: 'account', label: '安全设置', href: ACCOUNT_ROUTE, icon: <Settings aria-hidden="true" /> },
+                { id: 'account', label: '安全设置', href: ACCOUNT_ROUTE, icon: <Settings weight="bold" aria-hidden="true" /> },
                 {
                   id: 'logout',
                   label: '退出登录',
-                  icon: <LogOut aria-hidden="true" />,
+                  icon: <LogOut weight="bold" aria-hidden="true" />,
                   danger: true,
                   loading: logoutMutation.isPending,
                   onSelect: () => void handleLogout(),
@@ -206,7 +227,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                 setMenuOpen(false)
                 setDrawerOpen(true)
               }}
-              icon={<Menu className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+              icon={<Menu weight="bold" className={iconSize.md} aria-hidden="true" />}
             />
           </div>
         </div>
@@ -244,7 +265,7 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                 variant="ghost"
                 aria-label="关闭导航菜单"
                 onClick={closeDrawer}
-                icon={<X className="h-[var(--icon-md)] w-[var(--icon-md)]" aria-hidden="true" />}
+                icon={<X weight="bold" className={iconSize.md} aria-hidden="true" />}
               />
             </div>
 
@@ -270,12 +291,14 @@ export function WorkspaceHeader({ initialUser }: WorkspaceHeaderProps) {
                   <button
                     key={item.key}
                     type="button"
+                    disabled={submissionBusy}
+                    title={submissionBusy ? '正在提交，请稍候再切换模式' : undefined}
                     onClick={() => handleModeSelect(item.mode)}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(navItemClass(isActive), 'w-full text-left')}
                   >
                     {isActive ? <span aria-hidden="true" className={activeBarClass(false)} /> : null}
-                    <Icon className="h-[var(--icon-sm)] w-[var(--icon-sm)]" aria-hidden="true" />
+                    <Icon weight="duotone" className={iconSize.sm} aria-hidden="true" />
                     {item.label}
                   </button>
                 )

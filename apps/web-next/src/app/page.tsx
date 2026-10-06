@@ -1,16 +1,16 @@
 import Link from 'next/link'
 import {
-  ArrowRight,
-  Download,
-  Layers3,
-  Library,
-  Mail,
-  PenLine,
-  Repeat,
-  ShieldCheck,
-  SlidersHorizontal,
-  WandSparkles,
-} from 'lucide-react'
+  ArrowRightIcon as ArrowRight,
+  DownloadSimpleIcon as Download,
+  StackIcon as Layers3,
+  ImagesSquareIcon as Library,
+  EnvelopeSimpleIcon as Mail,
+  PencilLineIcon as PenLine,
+  ArrowsClockwiseIcon as Repeat,
+  ShieldCheckIcon as ShieldCheck,
+  SlidersHorizontalIcon as SlidersHorizontal,
+  MagicWandIcon as WandSparkles,
+} from '@phosphor-icons/react/ssr'
 import { Reveal } from '@/shared/components/reveal'
 import { Card, CardBody, CardHeader, CardTitle } from '@/shared/components/ui/card'
 import { PublicHeader } from '@/shared/components/public-header'
@@ -21,6 +21,7 @@ import { SiteFooter } from '@/shared/components/site-footer'
 // recipe module instead of mirrored here.
 import { buttonVariants } from '@/shared/components/ui/button-variants'
 import { cn } from '@/shared/lib/cn'
+import { iconSize } from '@/shared/components/ui'
 
 export const dynamic = 'force-static'
 
@@ -104,7 +105,7 @@ export default function HomePage() {
 
       <main>
         {/* Hero：营销模式 — 上下 96px（桌面）/ 64px（手机），内容 `max-w-content` 居中 */}
-        <Reveal staggerIndex={0}>
+        <Reveal trigger="load">
           <section className="scroll-mt-16">
             <div className="mx-auto grid w-full max-w-content items-start gap-12 px-4 py-16 sm:px-6 md:grid-cols-[minmax(0,1fr)_minmax(320px,26rem)] lg:py-24">
               <div className="max-w-2xl">
@@ -122,7 +123,7 @@ export default function HomePage() {
                 <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                   <Link href="/login" className={heroPrimary}>
                     开始创作
-                    <ArrowRight aria-hidden="true" />
+                    <ArrowRight weight="bold" aria-hidden="true" />
                   </Link>
                   <Link href="#workflow" className={heroGhost}>
                     看看创作流程
@@ -167,7 +168,7 @@ export default function HomePage() {
 
         {/* Capabilities：卡片网格 2–3 列，间距 32px，卡片为图标 + 标题 + 描述 */}
         <section id="capabilities" aria-labelledby="capabilities-title" className="scroll-mt-16">
-          <Reveal staggerIndex={1}>
+          <Reveal>
             <div className="mx-auto w-full max-w-content px-4 py-16 sm:px-6 lg:py-24">
               <header className="max-w-3xl">
                 <h1 className="text-title text-foreground">产品能力</h1>
@@ -185,7 +186,7 @@ export default function HomePage() {
                   return (
                     <li key={capability.title}>
                       <Card className="h-full">
-                        <Icon className="h-[var(--icon-lg)] w-[var(--icon-lg)] text-muted-foreground" aria-hidden="true" />
+                        <Icon weight="duotone" className={`${iconSize.lg} text-muted-foreground`} aria-hidden="true" />
                         <CardHeader>
                           <CardTitle level={3}>{capability.title}</CardTitle>
                         </CardHeader>
@@ -203,7 +204,7 @@ export default function HomePage() {
 
         {/* Workflow：surface 台阶把这一段从画布上分开，区块之间仍是 64–96px */}
         <section id="workflow" aria-labelledby="workflow-title" className="scroll-mt-16 bg-surface">
-          <Reveal staggerIndex={2}>
+          <Reveal>
             <div className="mx-auto grid w-full max-w-content gap-12 px-4 py-16 sm:px-6 md:grid-cols-[0.8fr_1fr] lg:py-24">
               <div className="max-w-xl">
                 <h1 className="text-title text-foreground">创作流程</h1>
@@ -224,7 +225,7 @@ export default function HomePage() {
                   return (
                     <li key={step.title} className="flex min-w-0 flex-col gap-1">
                       <h3 className="flex items-center gap-2 text-subtitle text-foreground [line-break:strict]">
-                        <StepIcon className="h-[var(--icon-md)] w-[var(--icon-md)] shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <StepIcon weight="duotone" className={`${iconSize.md} shrink-0 text-muted-foreground`} aria-hidden="true" />
                         {step.title}
                       </h3>
                       <p className="text-sm text-muted-foreground [text-wrap:pretty]">{step.description}</p>
@@ -238,7 +239,7 @@ export default function HomePage() {
 
         {/* CTA：tonal 底色分区，居中排版 */}
         <section aria-labelledby="cta-title" className="bg-tonal">
-          <Reveal staggerIndex={3}>
+          <Reveal>
             <div className="mx-auto flex w-full max-w-content flex-col items-center gap-6 px-4 py-16 text-center sm:px-6 lg:py-24">
               <h2 id="cta-title" className="text-section text-foreground [line-break:strict] [text-wrap:balance]">
                 准备好让第一段描述成形了吗？
@@ -249,7 +250,7 @@ export default function HomePage() {
               <div className="flex flex-col items-center gap-3 sm:flex-row">
                 <Link href="/login" className={heroPrimary}>
                   进入 MuseCanvas
-                  <ArrowRight aria-hidden="true" />
+                  <ArrowRight weight="bold" aria-hidden="true" />
                 </Link>
                 <Link href="/terms" className={heroGhost}>
                   先看用户协议

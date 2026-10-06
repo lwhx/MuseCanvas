@@ -3,6 +3,7 @@
 import { createContext, useContext, useId, useRef } from 'react'
 import type { ChangeEvent, InputHTMLAttributes, ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn'
+import { controlSquare } from './size'
 
 interface RadioGroupContextValue {
   name?: string
@@ -115,7 +116,7 @@ export function Radio({
     <span
       aria-hidden="true"
       className={cn(
-        'relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+        'relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors',
         'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-border-focus',
         isChecked
           ? 'border-primary bg-surface'
@@ -149,7 +150,8 @@ export function Radio({
       <label
         htmlFor={id}
         className={cn(
-          'group inline-flex h-[var(--control-md)] w-[var(--control-md)] select-none items-center justify-center rounded-control',
+          'group inline-flex select-none items-center justify-center rounded-control',
+          controlSquare.md,
           isDisabled ? 'is-disabled' : 'cursor-pointer',
           className,
         )}

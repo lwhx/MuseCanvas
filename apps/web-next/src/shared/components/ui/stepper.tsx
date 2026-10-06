@@ -1,7 +1,7 @@
 'use client'
 
 import type { CSSProperties, ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { CheckIcon as Check } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { controlSquare, iconSize } from './size'
 
@@ -100,7 +100,7 @@ export function Stepper({
               )}
             >
               {done ? (
-                <Check aria-hidden="true" className={iconSize.sm} />
+                <Check weight="fill" aria-hidden="true" className={iconSize.sm} />
               ) : (
                 <span aria-hidden="true" className="font-mono tabular-nums">
                   {index + 1}

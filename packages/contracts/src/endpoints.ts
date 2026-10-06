@@ -30,6 +30,19 @@ export const API_ENDPOINTS = {
   models: `${P}/models`,
   generations: `${P}/generations`,
 
+  canvases: {
+    list: `${P}/canvases`,
+    create: `${P}/canvases`,
+    detail: (id: string) => `${P}/canvases/${id}`,
+    update: (id: string) => `${P}/canvases/${id}`,
+    remove: (id: string) => `${P}/canvases/${id}`,
+    agent: {
+      messages: (id: string) => `${P}/canvases/${id}/agent/messages`,
+      history: (id: string) => `${P}/canvases/${id}/agent/history`,
+      confirm: (id: string) => `${P}/canvases/${id}/agent/confirm`,
+    },
+  },
+
   // 局部修改：multipart 图片编辑，成功时返回与 POST /generations 相同的 job DTO
   images: {
     edit: `${P}/images/edit`,
@@ -110,5 +123,6 @@ export const API_ENDPOINTS = {
     promptTemplatesPreview: `${P}/admin/prompt-templates/preview`,
     promptTemplatesExport: `${P}/admin/prompt-templates/export`,
     promptOptimizationSettings: `${P}/admin/prompt-optimization-settings`,
+    canvasAgentSettings: `${P}/admin/canvas-agent-settings`,
   },
 } as const

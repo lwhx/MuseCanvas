@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { WarningCircleIcon as CircleAlert, CheckCircleIcon as CircleCheck, InfoIcon as Info, WarningIcon as TriangleAlert, XIcon as X } from '@phosphor-icons/react/ssr'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { IconButton } from './button'
 import { iconSize, iconSlot } from './size'
@@ -15,7 +15,7 @@ const toneClasses: Record<AlertTone, { wrap: string; icon: string }> = {
   danger: { wrap: 'border-danger-border bg-danger-soft', icon: 'text-danger' },
 }
 
-const toneIcons: Record<AlertTone, LucideIcon> = {
+const toneIcons: Record<AlertTone, PhosphorIcon> = {
   info: Info,
   success: CircleCheck,
   warning: TriangleAlert,
@@ -59,7 +59,7 @@ export function Alert({
   className,
 }: AlertProps) {
   const Icon = toneIcons[tone]
-  const shownIcon = icon === false ? null : icon ?? <Icon aria-hidden="true" className={iconSize.md} />
+  const shownIcon = icon === false ? null : icon ?? <Icon weight="fill" aria-hidden="true" className={iconSize.md} />
 
   return (
     <div
@@ -82,7 +82,7 @@ export function Alert({
           size="sm"
           aria-label={dismissLabel}
           onClick={onDismiss}
-          icon={<X aria-hidden="true" className={iconSize.sm} />}
+          icon={<X weight="bold" aria-hidden="true" className={iconSize.sm} />}
         />
       ) : null}
     </div>

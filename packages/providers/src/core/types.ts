@@ -313,6 +313,8 @@ export type ExecutionContext = {
  * Safe HTTP Client interface injected into plugins.
  */
 export type SafeHttpRequestInit = {
+  /** Caller cancellation; the request deadline still applies through body consumption. */
+  signal?: AbortSignal
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   headers?: Record<string, string>
   body?: string | FormData | Buffer | Uint8Array

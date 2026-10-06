@@ -5,10 +5,29 @@
  * enforce the same SSRF rule. Pure: no node builtins, no I/O.
  */
 
-/** Private / loopback / link-local host test (moved verbatim from language-model.ts). */
+/** Literal private / loopback / link-local host test; does not resolve DNS. */
 export function isPrivateProviderHost(host: string): boolean {
-  const h = host.toLowerCase()
-  return h === 'localhost' || h === '0.0.0.0' || h === '::1' || /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+  const lower = host.toLowerCase()
+  const h = lower.startsWith('[') && lower.endsWith(']') ? lower.slice(1, -1) : lower
+  if (!h.includes(':')) {
+    return h === 'localhost' || h === '0.0.0.0' || /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+  }
+
+  // URL canonicalizes valid IPv6, including dotted mapped IPv4, without I/O.
+  if (!/^[0-9a-f:.]+$/.test(h)) return false
+  let canonical: string
+  try { canonical = new URL(`https://[${h}]/`).hostname.slice(1, -1) }
+  catch { return false }
+  const [left, right] = canonical.split('::')
+  const head = left ? left.split(':').map(word => parseInt(word, 16)) : []
+  const tail = right ? right.split(':').map(word => parseInt(word, 16)) : []
+  const words = right === undefined ? head : [...head, ...Array<number>(8 - head.length - tail.length).fill(0), ...tail]
+  if (words.every(word => word === 0) || (words.slice(0, 7).every(word => word === 0) && words[7] === 1)) return true
+  if ((words[0] & 0xfe00) === 0xfc00 || (words[0] & 0xffc0) === 0xfe80) return true
+  if (words.slice(0, 5).every(word => word === 0) && words[5] === 0xffff) {
+    return isPrivateProviderHost(`${words[6] >> 8}.${words[6] & 255}.${words[7] >> 8}.${words[7] & 255}`)
+  }
+  return false
 }
 
 /** Hostname of an absolute URL, or null when the value is not parseable. Never throws. */

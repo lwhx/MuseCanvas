@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useId } from 'react'
 import type { HTMLAttributes, ReactNode, Ref } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { WarningCircleIcon as CircleAlert } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { iconSize } from './size'
 
@@ -84,7 +84,7 @@ export function FormField({
 
         {showError ? (
           <p id={errorId} className="mt-1 flex items-start gap-1 text-xs text-danger">
-            <CircleAlert aria-hidden="true" className={`mt-0.5 ${iconSize.xs} shrink-0`} />
+            <CircleAlert weight="fill" aria-hidden="true" className={`mt-0.5 ${iconSize.xs} shrink-0`} />
             <span>{error}</span>
           </p>
         ) : null}

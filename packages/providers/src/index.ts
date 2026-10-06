@@ -7,6 +7,9 @@ export type { PromptTemplateEntry, PromptTemplateIndex } from './prompt-template
 export { BUILTIN_LANGUAGE_PLUGIN_KEYS, buildLanguageModelRequest, parseLanguageModelResponse, callLanguageModel, callProtocolLanguageModel, isBuiltinLanguagePluginKey, parseExactJsonString, LanguageModelHttpError } from './language-model'
 export type { LanguageProtocol, LanguageModelInput, LanguageModelResult, ReasoningEffort, LanguageModelErrorDiagnostic } from './language-model'
 
+export { callLanguageModelChat, buildLanguageModelChatRequest, parseLanguageModelChatResponse, LanguageModelChatError } from './language-model-chat'
+export type { LanguageModelChatInput, LanguageModelChatResult, LanguageModelChatMessage, LanguageModelChatTool, LanguageModelChatToolCall, LanguageModelChatContentBlock, LanguageModelChatErrorCode } from './language-model-chat'
+
 // Kernel & Plugin exports (includes shared image-input helpers and the
 // versioned image plugin constants/instances)
 export * from './core/index'

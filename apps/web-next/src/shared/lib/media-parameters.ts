@@ -402,7 +402,19 @@ export function reconcileModelParameters(
   model: ParameterCarrier | null | undefined,
   values: ParameterState | undefined,
 ): ParameterState {
-  return reconcileParameters((model?.parameters ?? []) as ParameterDescriptor[], values ?? {})
+  const descriptors = model?.parameters ?? []
+  // UI state is canonical, whereas validation uses the model's wire names.
+  const declared: ParameterState = {}
+  for (const descriptor of descriptors) {
+    const value = values?.[canonicalNameOf(descriptor)] ?? values?.[descriptor.name]
+    if (value !== undefined) declared[descriptor.name] = value
+  }
+  const reconciled = reconcileParameters(descriptors, declared)
+  return Object.fromEntries(descriptors.flatMap((descriptor) =>
+    descriptor.name in reconciled
+      ? [[canonicalNameOf(descriptor), reconciled[descriptor.name]]]
+      : [],
+  ))
 }
 
 export { AUTO_SIZE_VALUE, describeImageSize, parseImageSize, reduceRatio, isAdvancedParameter }

@@ -5,24 +5,25 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { User } from '@/shared/types'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { ThemeToggle } from '@/shared/components/ui/theme-toggle'
 import { Avatar } from '@/shared/components/ui/avatar'
 import { IconButton, buttonVariants } from '@/shared/components/ui/button'
 import { useDialog } from '@/shared/hooks/useDialog'
 import { cn } from '@/shared/lib/cn'
 import {
-  LayoutDashboard,
-  Users,
-  Blocks,
-  Cpu,
-  FileText,
-  ShieldCheck,
-  Settings,
-  ListTodo,
-  ChevronRight,
-  Menu,
-  X,
-} from 'lucide-react'
+  SquaresFourIcon as LayoutDashboard,
+  UsersIcon as Users,
+  PuzzlePieceIcon as Blocks,
+  CpuIcon as Cpu,
+  FileTextIcon as FileText,
+  ShieldCheckIcon as ShieldCheck,
+  GearSixIcon as Settings,
+  ListChecksIcon as ListTodo,
+  CaretRightIcon as ChevronRight,
+  ListIcon as Menu,
+  XIcon as X,
+} from '@phosphor-icons/react'
 import { iconSize } from '@/shared/components/ui'
 
 interface AdminShellProps {
@@ -33,7 +34,7 @@ interface AdminShellProps {
 interface NavItem {
   path: string
   label: string
-  icon: React.ComponentType<{ className?: string }>
+  icon: PhosphorIcon
 }
 
 interface NavGroup {
@@ -206,7 +207,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
                   onClick={onNavigate}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'relative flex min-h-[var(--control-md)] items-center gap-3 rounded-control',
+                    'relative flex min-h-[var(--control-lg)] items-center gap-3 rounded-control md:min-h-[var(--control-md)]',
                     'px-3 text-sm font-medium transition-colors',
                     active
                       ? 'bg-tonal-selected text-foreground'
@@ -220,7 +221,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
                       className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-primary"
                     />
                   ) : null}
-                  <Icon className={`${iconSize.sm} shrink-0`} aria-hidden="true" />
+                  <Icon weight="duotone" className={`${iconSize.sm} shrink-0`} aria-hidden="true" />
                   <span className="truncate">{item.label}</span>
                 </Link>
               )
@@ -232,35 +233,36 @@ export function AdminShell({ user, children }: AdminShellProps) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-canvas text-foreground">
+    <div className="flex h-dvh min-w-0 flex-col bg-canvas text-foreground">
       {/* Header — 56px (`--layout-header`), strictly aligned with workspace header */}
       <header className="relative z-sticky flex h-[var(--layout-header)] shrink-0 items-center border-b border-border bg-surface">
-        <div className="mx-auto flex w-full max-w-content items-center gap-3 px-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-content min-w-0 items-center gap-2 px-4 sm:gap-3 sm:px-6">
           <IconButton
             variant="ghost"
             size="sm"
             onClick={() => setDrawerOpen(true)}
             aria-label="打开管理导航"
-            className="md:hidden"
-            icon={<Menu className={iconSize.md} aria-hidden="true" />}
+            className="min-h-[var(--control-lg)] min-w-[var(--control-lg)] md:hidden"
+            icon={<Menu weight="bold" className={iconSize.md} aria-hidden="true" />}
           />
 
           <Link
             href="/generate"
-            className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'shrink-0')}
+            aria-label="返回创作端"
+            className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-h-[var(--control-lg)] min-w-[var(--control-lg)] shrink-0 sm:min-h-[var(--control-sm)]')}
           >
-            <ChevronRight className={`${iconSize.sm} rotate-180`} aria-hidden="true" />
-            返回创作端
+            <ChevronRight weight="bold" className={`${iconSize.sm} rotate-180`} aria-hidden="true" />
+            <span className="hidden sm:inline">返回创作端</span>
           </Link>
 
           <Breadcrumbs pathname={pathname} />
 
-          <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 max-md:[&_button]:min-h-[var(--control-lg)] max-md:[&_button]:min-w-[var(--control-lg)]">
             <ThemeToggle />
             <span className="hidden max-w-48 truncate text-sm text-muted-foreground lg:inline">{user.email}</span>
             {/* Decorative: the address next to it is the label, so the letter glyph
                 must not be announced a second time. */}
-            <Avatar size="sm" initial={userInitial} decorative />
+            <span className="hidden sm:inline"><Avatar size="sm" initial={userInitial} decorative /></span>
           </div>
         </div>
       </header>
@@ -276,7 +278,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
           </aside>
 
           {/* Main content — 16/24/32px padding rhythm */}
-          <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8">
+          <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 sm:p-6 md:p-8">
             {children}
           </main>
         </div>
@@ -295,14 +297,15 @@ export function AdminShell({ user, children }: AdminShellProps) {
           )}
         >
           <div
-            className="fixed inset-0 bg-overlay/40"
+            className="fixed inset-0"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-overlay) calc(var(--opacity-overlay) * 100%), transparent)' }}
             onClick={closeDrawer}
             aria-hidden="true"
           />
           <div
             {...drawerDialogProps}
             className={cn(
-              'fixed inset-y-0 left-0 z-modal flex w-full max-w-sidebar flex-col gap-4 bg-surface p-4 shadow-drawer',
+              'fixed inset-y-0 left-0 z-modal flex h-dvh w-full max-w-sidebar min-w-0 flex-col gap-4 bg-surface p-4 shadow-drawer',
               drawerPhase === 'close' ? 'motion-drawer-out-left' : 'motion-drawer-in-left',
             )}
           >
@@ -317,7 +320,8 @@ export function AdminShell({ user, children }: AdminShellProps) {
                 size="sm"
                 onClick={closeDrawer}
                 aria-label="关闭导航"
-                icon={<X className={iconSize.md} aria-hidden="true" />}
+                className="min-h-[var(--control-lg)] min-w-[var(--control-lg)]"
+                icon={<X weight="bold" className={iconSize.md} aria-hidden="true" />}
               />
             </div>
 

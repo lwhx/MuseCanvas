@@ -38,6 +38,19 @@ test('dynamic helpers interpolate id and provider segments', () => {
   assert.equal(API_ENDPOINTS.admin.pluginDocs('p1'), '/api/admin/plugins/p1/docs')
 })
 
+test('canvas M1/M2 endpoint samples use the shared helpers', () => {
+  const id = '12345678-1234-1234-1234-123456789abc'
+  assert.equal(API_ENDPOINTS.canvases.list, '/api/canvases')
+  assert.equal(API_ENDPOINTS.canvases.create, '/api/canvases')
+  assert.equal(API_ENDPOINTS.canvases.detail(id), `/api/canvases/${id}`)
+  assert.equal(API_ENDPOINTS.canvases.update(id), `/api/canvases/${id}`)
+  assert.equal(API_ENDPOINTS.canvases.remove(id), `/api/canvases/${id}`)
+  assert.equal(API_ENDPOINTS.canvases.agent.messages(id), `/api/canvases/${id}/agent/messages`)
+  assert.equal(API_ENDPOINTS.canvases.agent.history(id), `/api/canvases/${id}/agent/history`)
+  assert.equal(API_ENDPOINTS.canvases.agent.confirm(id), `/api/canvases/${id}/agent/confirm`)
+  assert.equal(API_ENDPOINTS.admin.canvasAgentSettings, '/api/admin/canvas-agent-settings')
+})
+
 test('oauth provider whitelist matches backend path.match constraint', () => {
   assert.deepEqual([...OAUTH_PROVIDERS], ['github', 'google'])
 })

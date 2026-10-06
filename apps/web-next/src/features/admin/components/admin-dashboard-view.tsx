@@ -1,13 +1,18 @@
 'use client'
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import Link from 'next/link'
 import { api } from '@/shared/services/api'
 import type { AdminJob } from '@/shared/types'
+import { requireAdminData } from '../lib/admin-query'
+import { AdminQueryFeedback } from './admin-query-feedback'
+import { AdminMobileRecords, AdminRecordDetailDialog } from './admin-record-detail-dialog'
+import { AdminJobDetail } from './admin-job-detail'
 import { formatLocalizedDateTime } from '@/shared/lib/format'
 import { jobStatusMeta } from '@/shared/lib/job-status'
-import { RefreshCw } from 'lucide-react'
+import { ArrowClockwiseIcon as RefreshCw } from '@phosphor-icons/react'
 import {
   Alert,
   Badge,
@@ -43,6 +48,7 @@ interface AdminDashboardViewProps {
 const RECENT_JOB_LIMIT = 10
 
 export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDashboardViewProps) {
+  const [detailJob, setDetailJob] = useState<AdminJob | null>(null)
   const {
     data: metrics,
     refetch: refetchMetrics,
@@ -53,9 +59,9 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
     queryKey: ['admin', 'dashboard'],
     queryFn: async () => {
       const res = await api<DashboardMetrics>(API_ENDPOINTS.admin.dashboard)
-      return res.data || null
+      return requireAdminData(res, '加载汇总指标失败')
     },
-    initialData: initialMetrics,
+    initialData: initialMetrics ?? undefined,
   })
 
   const {
@@ -64,13 +70,14 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
     isFetching: isFetchingJobs,
     isLoading: jobsLoading,
     isError: isJobsError,
+    error: jobsError,
   } = useQuery({
     queryKey: ['admin', 'jobs', { limit: RECENT_JOB_LIMIT }],
     queryFn: async () => {
       const res = await api<{ items: AdminJob[] }>(API_ENDPOINTS.admin.jobs, {
         params: { limit: RECENT_JOB_LIMIT },
       })
-      return res.data?.items || []
+      return requireAdminData(res, '加载最近任务失败').items
     },
     initialData: initialJobs.length ? initialJobs : undefined,
   })
@@ -87,8 +94,10 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex min-w-0 flex-col gap-8">
       <PageHeader
+        className="min-w-0 [overflow-wrap:anywhere]"
+        actionsClassName="max-w-full min-w-0 max-md:[&_button]:min-h-[var(--control-lg)] max-md:[&_a]:min-h-[var(--control-lg)]"
         title="系统概览"
         description="查看系统汇总指标和最近任务状态。"
         actions={
@@ -96,7 +105,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
             variant="secondary"
             loading={refreshing}
             onClick={handleRefresh}
-            icon={<RefreshCw aria-hidden="true" />}
+            icon={<RefreshCw weight="bold" aria-hidden="true" />}
           >
             刷新数据
           </Button>
@@ -106,7 +115,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
       {isMetricsError ? (
         <Alert
           tone="danger"
-          title="无法加载汇总指标"
+          title={metrics ? '汇总指标刷新失败' : '无法加载汇总指标'}
           action={
             <Button variant="secondary" size="sm" onClick={() => refetchMetrics()}>
               刷新重试
@@ -114,7 +123,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
           }
         >
           {metricsError?.message ? `${metricsError.message}。` : '服务未返回统计数据。'}
-          请检查网络连接，或稍后重试。
+          {metrics ? '仍显示上次成功的数据，可能已过时。' : '请检查网络连接，或稍后重试。'}
         </Alert>
       ) : null}
 
@@ -128,18 +137,34 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
           loading={metricsPending}
           className="text-success"
         />
-        <StatCard
-          label="7 天失败任务数"
-          value={metrics?.failedJobs7d ?? '—'}
-          loading={metricsPending}
-          className="text-danger"
-        />
+        <div className="flex min-w-0 flex-col gap-2">
+          <StatCard
+            label="7 天失败任务数"
+            value={metrics?.failedJobs7d ?? '—'}
+            loading={metricsPending}
+            className="text-danger"
+          />
+          <Link href="/admin/jobs?status=failed" className={buttonVariants({ variant: 'secondary' })}>查看所有失败任务</Link>
+        </div>
       </div>
 
       {/* Recent jobs */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-subtitle font-normal text-foreground">最近任务</h2>
-        <DataTable caption={`最近 ${RECENT_JOB_LIMIT} 条生成任务`} columns={4}>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <h2 className="text-subtitle font-normal text-foreground">最近任务</h2>
+          <Link href="/admin/jobs" className={buttonVariants({ variant: 'secondary' })}>查看全部任务</Link>
+        </div>
+        {jobs !== undefined && <AdminQueryFeedback error={jobsError} hasData label="最近任务" onRetry={() => refetchJobs()} />}
+        <AdminMobileRecords
+          records={jobs ?? []} loading={jobsPending}
+          error={isJobsError && jobs === undefined ? jobsError?.message || '加载最近任务失败' : null}
+          onRetry={() => { void refetchJobs() }} empty={<>用户开始创作后，最近的任务会出现在这里。<Link href="/admin/jobs" className={buttonVariants({ variant: 'secondary' })}>查看全部任务</Link></>}
+          title={(job) => job.modelName || '未知模型'}
+          status={(job) => <Badge className={jobStatusMeta(job.status).badge}>{jobStatusMeta(job.status).label}</Badge>}
+          summary={(job) => <><span className="font-mono">{job.id.slice(0, 8)}…</span> · {formatLocalizedDateTime(job.createdAt)}</>}
+          onDetails={setDetailJob}
+        />
+        <DataTable cardClassName="hidden md:block" caption={`最近 ${RECENT_JOB_LIMIT} 条生成任务`} columns={4}>
           <TableHead>
             <TableHeadCell>任务 ID</TableHeadCell>
             <TableHeadCell>模型</TableHeadCell>
@@ -159,7 +184,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
                   ]}
                 />
               ))
-            ) : isJobsError ? (
+            ) : isJobsError && jobs === undefined ? (
               <TableStateRow>
                 <EmptyState
                   variant="error"
@@ -174,7 +199,7 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
                 const status = jobStatusMeta(job.status)
                 return (
                   <TableRow key={job.id}>
-                    <TableCell mono tone="muted">{job.id.slice(0, 8)}…</TableCell>
+                    <TableCell mono tone="muted"><Button variant="ghost" size="sm" onClick={() => setDetailJob(job)} aria-label={`查看任务 ${job.id} 详情`}>{job.id.slice(0, 8)}…</Button></TableCell>
                     <TableCell tone="strong">
                       {job.modelName || '未知模型'}
                     </TableCell>
@@ -205,6 +230,9 @@ export function AdminDashboardView({ initialMetrics, initialJobs = [] }: AdminDa
             )}
           </TableBody>
         </DataTable>
+        <AdminRecordDetailDialog open={detailJob !== null} onClose={() => setDetailJob(null)} title="最近任务详情">
+          {detailJob && <AdminJobDetail job={detailJob} />}
+        </AdminRecordDetailDialog>
       </section>
     </div>
   )

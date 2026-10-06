@@ -1,17 +1,18 @@
 'use client'
 
 import {
+  useEffect,
   useMemo,
   useRef,
   useState } from 'react'
 import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  ImagePlus,
-  Trash2,
-  Upload,
-  } from 'lucide-react'
+  CheckIcon as Check,
+  CaretLeftIcon as ChevronLeft,
+  CaretRightIcon as ChevronRight,
+  ImagesIcon as ImagePlus,
+  TrashIcon as Trash2,
+  UploadSimpleIcon as Upload,
+  } from '@phosphor-icons/react'
 import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import {
   ALLOWED_IMAGE_MIME_TYPES,
@@ -60,6 +61,7 @@ export function ReferenceImagesDialog({
   model,
   plan,
   onClose,
+  disabled = false,
 }: {
   /** Desired visibility. Kept mounted so the shared `Dialog` can play its exit
    *  animation instead of the panel vanishing on unmount. */
@@ -72,6 +74,7 @@ export function ReferenceImagesDialog({
    *  guard all read the same plan. */
   plan: ImageInputPlan
   onClose: () => void
+  disabled?: boolean
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -87,7 +90,13 @@ export function ReferenceImagesDialog({
 
   const maxInputs = plan.capacity
   const supportsImages = maxInputs > 0
-  const canAdd = supportsImages && stagedImages.length < maxInputs
+  const canAdd = !disabled && supportsImages && stagedImages.length < maxInputs
+  useEffect(() => { if (disabled) setIsGalleryPickerOpen(false) }, [disabled])
+
+  function mutateInputs(action: () => unknown) {
+    if (disabled || useGenerateUiStore.getState().isGenerating) return
+    void action()
+  }
   const totalBytes = stagedImages.reduce((sum, image) => sum + image.sizeBytes, 0)
   const excludedGalleryAssetIds = useMemo(
     () => stagedImages.flatMap((image) => (image.assetId ? [image.assetId] : [])),
@@ -123,6 +132,7 @@ export function ReferenceImagesDialog({
   }
 
   async function handleFiles(fileList: File[] | FileList) {
+    if (disabled || useGenerateUiStore.getState().isGenerating) return
     fileReadCountRef.current += 1
     if (fileReadCountRef.current === 1) {
       setIsReadingFiles(true)
@@ -140,6 +150,7 @@ export function ReferenceImagesDialog({
   }
 
   async function handleGallerySelect(asset: Asset) {
+    if (disabled || useGenerateUiStore.getState().isGenerating) return
     // The helper reports capacity/size/geometry failures in the reference panel.
     // Close either way so that message remains visible instead of hiding behind the picker.
     await addGalleryImage(asset, model)
@@ -197,6 +208,7 @@ export function ReferenceImagesDialog({
         </div>
       }
     >
+      <fieldset disabled={disabled} inert={disabled} className="m-0 min-w-0 border-0 p-0">
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
@@ -208,8 +220,8 @@ export function ReferenceImagesDialog({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => void clearReferenceImages()}
-              icon={<Trash2 aria-hidden="true" />}
+              onClick={() => mutateInputs(() => clearReferenceImages())}
+              icon={<Trash2 weight="bold" aria-hidden="true" />}
             >
               删除全部
             </Button>
@@ -248,7 +260,7 @@ export function ReferenceImagesDialog({
       >
         {canAdd && (
           <div className="flex flex-col items-center gap-3 px-4 py-5 text-center">
-            <Upload aria-hidden="true" className={`${iconSize.xl} text-muted-foreground`} />
+            <Upload weight="duotone" aria-hidden="true" className={`${iconSize.xl} text-muted-foreground`} />
             <p className="text-sm font-medium text-foreground">拖拽图片到此处</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button
@@ -257,7 +269,7 @@ export function ReferenceImagesDialog({
                 size="sm"
                 disabled={!supportsImages}
                 onClick={() => fileInputRef.current?.click()}
-                icon={<ImagePlus aria-hidden="true" />}
+                icon={<ImagePlus weight="bold" aria-hidden="true" />}
               >
                 上传本地图片
               </Button>
@@ -266,7 +278,7 @@ export function ReferenceImagesDialog({
                 variant="secondary"
                 size="sm"
                 onClick={() => setIsGalleryPickerOpen(true)}
-                icon={<ImagePlus aria-hidden="true" className="text-primary" />}
+                icon={<ImagePlus weight="bold" aria-hidden="true" className="text-primary" />}
               >
                 从图库选择
               </Button>
@@ -315,7 +327,7 @@ export function ReferenceImagesDialog({
                           type="button"
                           variant="danger"
                           size="sm"
-                          onClick={() => void retryReferenceUpload(image.localId)}
+                          onClick={() => mutateInputs(() => retryReferenceUpload(image.localId))}
                           aria-label={`重试上传${noun} ${index + 1}`}
                         >
                           重试
@@ -326,7 +338,7 @@ export function ReferenceImagesDialog({
                         aria-hidden="true"
                         className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-pill bg-success text-on-success"
                       >
-                        <Check className={iconSize.xs} />
+                        <Check weight="fill" className={iconSize.xs} />
                       </span>
                     ) : (
                       // Real upload progress as a determinate bar; 校验中 / 排队中 have
@@ -371,27 +383,27 @@ export function ReferenceImagesDialog({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => reorderReferenceImages(index, index - 1)}
+                        onClick={() => mutateInputs(() => reorderReferenceImages(index, index - 1))}
                         disabled={index === 0}
                         aria-label={`将${noun} ${index + 1} 前移`}
-                        icon={<ChevronLeft aria-hidden="true" />}
+                        icon={<ChevronLeft weight="bold" aria-hidden="true" />}
                       />
                       <IconButton
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => reorderReferenceImages(index, index + 1)}
+                        onClick={() => mutateInputs(() => reorderReferenceImages(index, index + 1))}
                         disabled={index === stagedImages.length - 1}
                         aria-label={`将${noun} ${index + 1} 后移`}
-                        icon={<ChevronRight aria-hidden="true" />}
+                        icon={<ChevronRight weight="bold" aria-hidden="true" />}
                       />
                       <IconButton
                         type="button"
                         variant="danger-ghost"
                         size="sm"
-                        onClick={() => void removeReferenceImage(image.localId)}
+                        onClick={() => mutateInputs(() => removeReferenceImage(image.localId))}
                         aria-label={`删除${noun} ${index + 1}`}
-                        icon={<Trash2 aria-hidden="true" />}
+                        icon={<Trash2 weight="bold" aria-hidden="true" />}
                       />
                     </div>
                   </div>
@@ -428,8 +440,9 @@ export function ReferenceImagesDialog({
         onChange={onInputChange}
       />
 
+      </fieldset>
       <GalleryImagePicker
-        open={isGalleryPickerOpen}
+        open={isGalleryPickerOpen && !disabled}
         onClose={() => setIsGalleryPickerOpen(false)}
         onSelect={(asset) => void handleGallerySelect(asset)}
         excludedAssetIds={excludedGalleryAssetIds}

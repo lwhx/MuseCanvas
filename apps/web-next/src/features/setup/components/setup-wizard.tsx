@@ -32,7 +32,7 @@ import {
   iconSize,
 } from '@/shared/components/ui'
 import { cn } from '@/shared/lib/cn'
-import { Check, ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react'
+import { CheckIcon as Check, CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight, WarningCircleIcon as CircleAlert } from '@phosphor-icons/react'
 
 /**
  * What the wizard can actually read from `GET /setup/status`: the persisted
@@ -226,7 +226,7 @@ function ManualList({ items }: { items: string[] }) {
     <ul className="flex flex-col gap-2">
       {items.map((item) => (
         <li key={item} className="flex items-start gap-2 text-sm text-foreground">
-          <CircleAlert aria-hidden="true" className={`mt-1 ${iconSize.xs} shrink-0 text-muted-foreground`} />
+          <CircleAlert weight="fill" aria-hidden="true" className={`mt-1 ${iconSize.xs} shrink-0 text-muted-foreground`} />
           <span>{item}</span>
         </li>
       ))}
@@ -329,7 +329,7 @@ export function SetupWizard() {
                             <span className="text-sm text-foreground">{checkKeyLabel[check.key]}</span>
                             <Badge
                               tone={ok ? 'success' : check.status === 'missing' ? 'warning' : 'danger'}
-                              icon={ok ? <Check /> : <CircleAlert />}
+                              icon={ok ? <Check weight="fill" /> : <CircleAlert weight="fill" />}
                             >
                               {ok ? '正常' : check.status === 'missing' ? '缺失' : '异常'}
                             </Badge>
@@ -409,7 +409,7 @@ export function SetupWizard() {
                 variant="secondary"
                 onClick={() => navigateToStep(currentStepIndex - 1)}
                 disabled={currentStepIndex === 0}
-                icon={<ChevronLeft aria-hidden="true" className={iconSize.sm} />}
+                icon={<ChevronLeft weight="bold" aria-hidden="true" className={iconSize.sm} />}
               >
                 上一步
               </Button>
@@ -418,7 +418,7 @@ export function SetupWizard() {
                 <Button
                   onClick={() => navigateToStep(currentStepIndex + 1)}
                   icon={
-                    <ChevronRight
+                    <ChevronRight weight="bold"
                       aria-hidden="true"
                       className={cn(`${iconSize.sm} order-2`)}
                     />

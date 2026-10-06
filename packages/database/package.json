@@ -10,6 +10,7 @@
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@musecanvas/contracts": "workspace:*",
     "pg": "^8.22.0"
   },
   "devDependencies": {

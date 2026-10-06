@@ -2,10 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, CircleAlert, Info, TriangleAlert, X } from 'lucide-react'
+import { CheckIcon as Check, WarningCircleIcon as CircleAlert, InfoIcon as Info, WarningIcon as TriangleAlert, XIcon as X } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import type { ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { controlSquare, iconSize } from './size'
 
 export type ToastVariant = 'success' | 'warning' | 'error' | 'info'
@@ -66,7 +66,7 @@ const TONE_ICON: Record<ToastVariant, string> = {
   info: 'text-info',
 }
 
-const TONE_GLYPH: Record<ToastVariant, LucideIcon> = {
+const TONE_GLYPH: Record<ToastVariant, PhosphorIcon> = {
   success: Check,
   warning: TriangleAlert,
   error: CircleAlert,
@@ -205,7 +205,7 @@ function ToastViewport({
             )}
           >
             <div className="flex items-start gap-3">
-              <Glyph className={cn(`mt-0.5 ${iconSize.sm} shrink-0`, TONE_ICON[toast.variant])} aria-hidden="true" />
+              <Glyph weight="fill" className={cn(`mt-0.5 ${iconSize.sm} shrink-0`, TONE_ICON[toast.variant])} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">{toast.title}</p>
                 {toast.description ? (
@@ -235,7 +235,7 @@ function ToastViewport({
                     'text-muted-foreground hover:bg-tonal-hover hover:text-foreground active:bg-tonal-active motion-press',
                   )}
                 >
-                  <X className={iconSize.sm} aria-hidden="true" />
+                  <X weight="bold" className={iconSize.sm} aria-hidden="true" />
                 </button>
               </div>
             </div>

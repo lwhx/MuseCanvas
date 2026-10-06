@@ -1,5 +1,5 @@
-import { Loader2 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { CircleNotchIcon as Loader2 } from '@phosphor-icons/react/ssr'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { iconSize } from './size'
 
@@ -21,7 +21,7 @@ export interface SpinnerProps {
    */
   label?: string
   /** Swap the glyph for another loader without changing the behaviour contract. */
-  icon?: LucideIcon
+  icon?: PhosphorIcon
   className?: string
 }
 
@@ -33,7 +33,7 @@ export interface SpinnerProps {
 export function Spinner({ size = 'sm', label, icon: Icon = Loader2, className }: SpinnerProps) {
   return (
     <>
-      <Icon aria-hidden="true" className={cn('motion-spin shrink-0', sizeClass[size], className)} />
+      <Icon weight="bold" aria-hidden="true" className={cn('motion-spin shrink-0', sizeClass[size], className)} />
       {label ? <span className="sr-only">{label}</span> : null}
     </>
   )

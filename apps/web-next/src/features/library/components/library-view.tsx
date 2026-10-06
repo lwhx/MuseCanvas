@@ -11,13 +11,13 @@ import { usePathname,
   useRouter,
   useSearchParams } from 'next/navigation'
 import {
-  Download,
-  RefreshCw,
-  Search as SearchIcon,
-  Trash2,
-  X,
-  ZoomIn,
-  } from 'lucide-react'
+  DownloadSimpleIcon as Download,
+  ArrowClockwiseIcon as RefreshCw,
+  MagnifyingGlassIcon as SearchIcon,
+  TrashIcon as Trash2,
+  XIcon as X,
+  MagnifyingGlassPlusIcon as ZoomIn,
+  } from '@phosphor-icons/react'
 import {
   Alert,
   Badge,
@@ -400,7 +400,7 @@ export function LibraryView() {
                         onClick={() => openPreview(asset.id)}
                         aria-label="放大查看该作品"
                         className="bg-overlay/40 text-foreground-inverse enabled:hover:bg-overlay/60"
-                        icon={<ZoomIn aria-hidden="true" />}
+                        icon={<ZoomIn weight="bold" aria-hidden="true" />}
                       />
                       {/* Navigation + download, so a real link wears the chip rather
                           than a button that would only pretend to be one. */}
@@ -412,7 +412,7 @@ export function LibraryView() {
                         aria-label="下载该作品"
                         className={`inline-flex ${controlSquare.sm} shrink-0 items-center justify-center rounded-control bg-overlay/40 text-foreground-inverse transition-colors hover:bg-overlay/60`}
                       >
-                        <Download aria-hidden="true" className={iconSize.sm} />
+                        <Download weight="bold" aria-hidden="true" className={iconSize.sm} />
                       </a>
                       <IconButton
                         variant="ghost"
@@ -420,7 +420,7 @@ export function LibraryView() {
                         onClick={() => setDeleteTargetId(asset.id)}
                         aria-label="删除该作品"
                         className="bg-overlay/40 text-danger enabled:hover:bg-overlay/60"
-                        icon={<Trash2 aria-hidden="true" />}
+                        icon={<Trash2 weight="bold" aria-hidden="true" />}
                       />
                     </div>
                   </div>
@@ -465,7 +465,7 @@ export function LibraryView() {
             size="sm"
             onClick={() => void fetchNextPage()}
             loading={isFetchingNextPage}
-            icon={<RefreshCw aria-hidden="true" />}
+            icon={<RefreshCw weight="bold" aria-hidden="true" />}
           >
             加载更多作品
           </Button>
@@ -491,7 +491,7 @@ export function LibraryView() {
                 <Button
                   variant="danger-ghost"
                   size="sm"
-                  icon={<Trash2 aria-hidden="true" />}
+                  icon={<Trash2 weight="bold" aria-hidden="true" />}
                   onClick={() => setBatchDeleteOpen(true)}
                 >
                   删除选中 ({selectedAssetIds.length})
@@ -512,7 +512,7 @@ export function LibraryView() {
               <Button
                 variant="ghost"
                 size="sm"
-                icon={<RefreshCw aria-hidden="true" />}
+                icon={<RefreshCw weight="bold" aria-hidden="true" />}
                 loading={isFetching && !isFetchingNextPage}
                 onClick={() => void refetch()}
               >
@@ -529,7 +529,7 @@ export function LibraryView() {
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-60 flex-1 md:max-w-form">
-              <SearchIcon
+              <SearchIcon weight="bold"
                 aria-hidden="true"
                 className={`pointer-events-none absolute left-3 top-1/2 ${iconSize.sm} -translate-y-1/2 text-muted-foreground`}
               />
@@ -565,7 +565,7 @@ export function LibraryView() {
             <div className="flex flex-wrap items-center gap-2">
               {appliedQuery ? (
                 <span className="inline-flex items-center gap-1">
-                  <Badge tone="neutral" icon={<SearchIcon aria-hidden="true" />}>
+                  <Badge tone="neutral" icon={<SearchIcon weight="bold" aria-hidden="true" />}>
                     关键词：{appliedQuery}
                   </Badge>
                   <IconButton
@@ -574,7 +574,7 @@ export function LibraryView() {
                     aria-label="清除关键词筛选"
                     onClick={clearQuery}
                     className={`${controlSquare.xs} min-h-[var(--control-xs)]`}
-                    icon={<X aria-hidden="true" />}
+                    icon={<X weight="bold" aria-hidden="true" />}
                   />
                 </span>
               ) : null}
@@ -589,7 +589,7 @@ export function LibraryView() {
                     aria-label="清除作品类型筛选"
                     onClick={() => setFilterKind('all')}
                     className={`${controlSquare.xs} min-h-[var(--control-xs)]`}
-                    icon={<X aria-hidden="true" />}
+                    icon={<X weight="bold" aria-hidden="true" />}
                   />
                 </span>
               ) : null}

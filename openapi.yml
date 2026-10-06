@@ -1,0 +1,4975 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MuseCanvas Canvas M1/M2 API subset",
+    "version": "1.0.0",
+    "description": "Only six canvas/agent/settings paths and ten operations, not complete service. Pretty JSON serialization in openapi.yml: JSON is valid YAML 1.2, accepted by standard OpenAPI tools; native JSON.parse tests need no YAML dependency. Cookie session authentication, not token/Bearer. Dispatcher mutation Origin CSRF: absent/empty Origin allowed, otherwise parsed URL host including port, case-insensitive, must equal Host or rightmost nonempty X-Forwarded-Host. Scheme not compared; trusted proxy must safely overwrite/append forwarded host. Invalid Origin rejected before authentication with 403 CSRF_REJECTED; no CSRF token. Active live actor session required, admin role additionally for settings; actor canvas ownership is enforced. Typed bodies reject unknown fields. UTF-16/byte/graph limits in descriptions/x-* are runtime parser rules, not all expressible in JSON Schema. Redis shared fixed-window limiters fail OPEN on Redis failure: no exact request budget guarantee during outage. Durable turn/job budgets and separate claim/generation transactions do not promise cross-service atomicity; bounded TOCTOU remains. Examples synthetic, HTTP success requires seeded owned refs, no secrets or real user prompts."
+  },
+  "tags": [
+    {
+      "name": "Canvas"
+    },
+    {
+      "name": "Canvas agent settings"
+    }
+  ],
+  "security": [
+    {
+      "museSession": []
+    }
+  ],
+  "paths": {
+    "/api/canvases/{id}/agent/messages": {
+      "post": {
+        "operationId": "postCanvasAgentMessages",
+        "summary": "Start or recover bounded agent turn",
+        "description": "Pre-stream claim/validation errors are JSON with error HTTP status. After 200 SSE begins, expected failures emit error and terminate without new HTTP status. Upstream nonstreaming; text_delta is full segment, not token realtime. Ops are proposals only: apply locally then PATCH current revision. Stable message identity supports persisted-turn recovery, NOT Last-Event-ID replay. Recover via history snapshot and GET canvas. Default confirmation true; job_event inherits and server verifies terminal state. Shared actor agent limit 30/min includes history/confirm. Disconnect aborts remaining work but does not cancel already committed generations.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE: connected and 15000 ms heartbeat comments have no data. event name equals data.type. No guaranteed resumable event log.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/AgentStreamEvent"
+                },
+                "examples": {
+                  "text_delta": {
+                    "value": "event: text_delta\ndata: {\"type\":\"text_delta\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000040\",\"delta\":\"Example response\"}\n\n"
+                  },
+                  "tool_call": {
+                    "value": "event: tool_call\ndata: {\"type\":\"tool_call\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000041\",\"toolCall\":{\"id\":\"call_example\",\"name\":\"arrange\",\"arguments\":{\"positions\":[{\"nodeId\":\"123e4567-e89b-12d3-a456-000000000001\",\"position\":{\"x\":10,\"y\":20}}]}}}\n\n"
+                  },
+                  "tool_result": {
+                    "value": "event: tool_result\ndata: {\"type\":\"tool_result\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000042\",\"toolCallId\":\"call_example\",\"result\":{\"ok\":true},\"success\":true}\n\n"
+                  },
+                  "canvas_ops": {
+                    "value": "event: canvas_ops\ndata: {\"type\":\"canvas_ops\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000043\",\"ops\":[{\"type\":\"arrange\",\"positions\":[{\"nodeId\":\"123e4567-e89b-12d3-a456-000000000001\",\"position\":{\"x\":10,\"y\":20}}]}],\"baseRevision\":2}\n\n"
+                  },
+                  "pending_jobs": {
+                    "value": "event: pending_jobs\ndata: {\"type\":\"pending_jobs\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000044\",\"pendingJobs\":[{\"id\":\"123e4567-e89b-12d3-a456-000000000023\",\"toolCallId\":\"call_example\",\"kind\":\"image\",\"prompt\":\"Synthetic example\",\"modelId\":\"123e4567-e89b-12d3-a456-000000000011\",\"parameters\":{},\"sourceNodeId\":null,\"sourceAssetId\":null,\"createdAt\":\"2026-10-05T12:00:00.000Z\",\"expiresAt\":\"2026-10-05T12:15:00.000Z\",\"status\":\"pending\",\"jobId\":null}]}\n\n"
+                  },
+                  "confirm_required": {
+                    "value": "event: confirm_required\ndata: {\"type\":\"confirm_required\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000045\",\"pending\":{\"id\":\"123e4567-e89b-12d3-a456-000000000023\",\"toolCallId\":\"call_example\",\"kind\":\"image\",\"prompt\":\"Synthetic example\",\"modelId\":\"123e4567-e89b-12d3-a456-000000000011\",\"parameters\":{},\"sourceNodeId\":null,\"sourceAssetId\":null,\"createdAt\":\"2026-10-05T12:00:00.000Z\",\"expiresAt\":\"2026-10-05T12:15:00.000Z\",\"status\":\"pending\",\"jobId\":null}}\n\n"
+                  },
+                  "done": {
+                    "value": "event: done\ndata: {\"type\":\"done\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000046\",\"message\":{\"id\":\"123e4567-e89b-12d3-a456-000000000024\",\"seq\":2,\"role\":\"assistant\",\"content\":\"Example response\",\"createdAt\":\"2026-10-05T12:00:00.000Z\"},\"usage\":{\"inputTokens\":10,\"outputTokens\":5},\"requireConfirmation\":true,\"autoContinuationCount\":0}\n\n"
+                  },
+                  "error": {
+                    "value": "event: error\ndata: {\"type\":\"error\",\"turnId\":\"123e4567-e89b-12d3-a456-000000000031\",\"eventId\":\"123e4567-e89b-12d3-a456-000000000047\",\"code\":\"CANVAS_AGENT_TIMEOUT\",\"message\":\"CANVAS_AGENT_TIMEOUT\",\"retryable\":false}\n\n"
+                  }
+                },
+                "x-comment-examples": [
+                  ": connected\n\n",
+                  ": heartbeat\n\n"
+                ]
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-cache, no-transform"
+                }
+              },
+              "X-Accel-Buffering": {
+                "schema": {
+                  "type": "string",
+                  "const": "no"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT",
+            "x-error-codes": [
+              "INVALID_INPUT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_REJECTED; FORBIDDEN",
+            "x-error-codes": [
+              "CSRF_REJECTED",
+              "FORBIDDEN"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_REJECTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CSRF_REJECTED",
+                        "message": "CSRF_REJECTED"
+                      }
+                    }
+                  },
+                  "FORBIDDEN": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FORBIDDEN",
+                        "message": "FORBIDDEN"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CANVAS_NOT_FOUND",
+            "x-error-codes": [
+              "CANVAS_NOT_FOUND"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_NOT_FOUND": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NOT_FOUND",
+                        "message": "CANVAS_NOT_FOUND"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CANVAS_AGENT_DISABLED; CANVAS_AGENT_NOT_CONFIGURED; CANVAS_AGENT_MODEL_UNSUPPORTED; CANVAS_REVISION_CONFLICT; CANVAS_AGENT_BUSY; CANVAS_AGENT_MESSAGE_CONFLICT; CANVAS_AGENT_AUTO_CONTINUATION_LIMIT; SOURCE_NOT_READY",
+            "x-error-codes": [
+              "CANVAS_AGENT_DISABLED",
+              "CANVAS_AGENT_NOT_CONFIGURED",
+              "CANVAS_AGENT_MODEL_UNSUPPORTED",
+              "CANVAS_REVISION_CONFLICT",
+              "CANVAS_AGENT_BUSY",
+              "CANVAS_AGENT_MESSAGE_CONFLICT",
+              "CANVAS_AGENT_AUTO_CONTINUATION_LIMIT",
+              "SOURCE_NOT_READY"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_DISABLED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_DISABLED",
+                        "message": "CANVAS_AGENT_DISABLED"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_NOT_CONFIGURED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_NOT_CONFIGURED",
+                        "message": "CANVAS_AGENT_NOT_CONFIGURED"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_MODEL_UNSUPPORTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_MODEL_UNSUPPORTED",
+                        "message": "CANVAS_AGENT_MODEL_UNSUPPORTED"
+                      }
+                    }
+                  },
+                  "CANVAS_REVISION_CONFLICT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_REVISION_CONFLICT",
+                        "message": "CANVAS_REVISION_CONFLICT"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_BUSY": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_BUSY",
+                        "message": "CANVAS_AGENT_BUSY"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_MESSAGE_CONFLICT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_MESSAGE_CONFLICT",
+                        "message": "CANVAS_AGENT_MESSAGE_CONFLICT"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_AUTO_CONTINUATION_LIMIT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_AUTO_CONTINUATION_LIMIT",
+                        "message": "CANVAS_AGENT_AUTO_CONTINUATION_LIMIT"
+                      }
+                    }
+                  },
+                  "SOURCE_NOT_READY": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "SOURCE_NOT_READY",
+                        "message": "SOURCE_NOT_READY"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "CANVAS_AGENT_RATE_LIMITED",
+            "x-error-codes": [
+              "CANVAS_AGENT_RATE_LIMITED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_RATE_LIMITED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_RATE_LIMITED",
+                        "message": "CANVAS_AGENT_RATE_LIMITED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "CANVAS_AGENT_FAILED",
+            "x-error-codes": [
+              "CANVAS_AGENT_FAILED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_FAILED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_FAILED",
+                        "message": "CANVAS_AGENT_FAILED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            },
+            "description": "Owned live canvas UUID; foreign/deleted/missing are indistinguishable (404)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasAgentMessageRequest"
+              },
+              "examples": {
+                "example1": {
+                  "value": {
+                    "kind": "user",
+                    "messageId": "123e4567-e89b-12d3-a456-000000000021",
+                    "text": "Arrange these example nodes",
+                    "baseRevision": 2
+                  }
+                },
+                "example2": {
+                  "value": {
+                    "kind": "job_event",
+                    "messageId": "123e4567-e89b-12d3-a456-000000000022",
+                    "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                    "baseRevision": 2
+                  }
+                },
+                "example3": {
+                  "value": {
+                    "kind": "user",
+                    "messageId": "123e4567-e89b-12d3-a456-000000000025",
+                    "text": "Arrange these example nodes",
+                    "baseRevision": 2,
+                    "requireConfirmation": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/canvases": {
+      "get": {
+        "operationId": "listCanvases",
+        "summary": "List owned live canvases",
+        "description": "Descending (updatedAt,id) tuple pagination, default 20/max 100. Repeated limit/cursor rejected, unknown fields ignored. List items omit scene.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasListPageDtoEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT",
+            "x-error-codes": [
+              "INVALID_INPUT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Canonical positive integer without leading zeros."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "description": "Opaque nextCursor from previous page; malformed/empty cursor is 400."
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createCanvas",
+        "summary": "Create owned canvas",
+        "description": "Initial revision 1, absent title/scene/cover defaulted. Malformed JSON rejected, not empty create. Shared actor mutation limiter 60/min plus creation 20/min, consumed before body validation.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasDtoEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT; CANVAS_SCENE_TOO_LARGE; CANVAS_NODE_LIMIT_EXCEEDED; CANVAS_EDGE_LIMIT_EXCEEDED; CANVAS_DUPLICATE_NODE_ID; CANVAS_DUPLICATE_EDGE_ID; CANVAS_DANGLING_REFERENCE",
+            "x-error-codes": [
+              "INVALID_INPUT",
+              "CANVAS_SCENE_TOO_LARGE",
+              "CANVAS_NODE_LIMIT_EXCEEDED",
+              "CANVAS_EDGE_LIMIT_EXCEEDED",
+              "CANVAS_DUPLICATE_NODE_ID",
+              "CANVAS_DUPLICATE_EDGE_ID",
+              "CANVAS_DANGLING_REFERENCE"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  },
+                  "CANVAS_SCENE_TOO_LARGE": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_SCENE_TOO_LARGE",
+                        "message": "CANVAS_SCENE_TOO_LARGE"
+                      }
+                    }
+                  },
+                  "CANVAS_NODE_LIMIT_EXCEEDED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NODE_LIMIT_EXCEEDED",
+                        "message": "CANVAS_NODE_LIMIT_EXCEEDED"
+                      }
+                    }
+                  },
+                  "CANVAS_EDGE_LIMIT_EXCEEDED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_EDGE_LIMIT_EXCEEDED",
+                        "message": "CANVAS_EDGE_LIMIT_EXCEEDED"
+                      }
+                    }
+                  },
+                  "CANVAS_DUPLICATE_NODE_ID": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_DUPLICATE_NODE_ID",
+                        "message": "CANVAS_DUPLICATE_NODE_ID"
+                      }
+                    }
+                  },
+                  "CANVAS_DUPLICATE_EDGE_ID": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_DUPLICATE_EDGE_ID",
+                        "message": "CANVAS_DUPLICATE_EDGE_ID"
+                      }
+                    }
+                  },
+                  "CANVAS_DANGLING_REFERENCE": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_DANGLING_REFERENCE",
+                        "message": "CANVAS_DANGLING_REFERENCE"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_REJECTED",
+            "x-error-codes": [
+              "CSRF_REJECTED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_REJECTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CSRF_REJECTED",
+                        "message": "CSRF_REJECTED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "x-error-codes": [
+              "RATE_LIMITED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "RATE_LIMITED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCanvasRequest"
+              },
+              "examples": {
+                "example1": {
+                  "value": {
+                    "title": "  Example canvas  ",
+                    "scene": {
+                      "nodes": [
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000001",
+                          "type": "prompt",
+                          "position": {
+                            "x": 0,
+                            "y": 0
+                          },
+                          "data": {
+                            "prompt": "Synthetic example",
+                            "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                            "parameters": {
+                              "quality": "standard"
+                            }
+                          }
+                        },
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000002",
+                          "type": "image",
+                          "position": {
+                            "x": 240,
+                            "y": 0
+                          },
+                          "size": {
+                            "width": 200,
+                            "height": 200
+                          },
+                          "data": {
+                            "assetId": "123e4567-e89b-12d3-a456-000000000012",
+                            "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                            "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+                          }
+                        },
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000003",
+                          "type": "video",
+                          "position": {
+                            "x": 480,
+                            "y": 0
+                          },
+                          "data": {
+                            "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+                          }
+                        },
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000004",
+                          "type": "note",
+                          "position": {
+                            "x": 0,
+                            "y": 240
+                          },
+                          "data": {
+                            "text": "Example note"
+                          }
+                        }
+                      ],
+                      "edges": [
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000005",
+                          "source": "123e4567-e89b-12d3-a456-000000000001",
+                          "target": "123e4567-e89b-12d3-a456-000000000002"
+                        }
+                      ]
+                    },
+                    "coverAssetId": null
+                  }
+                },
+                "example2": {
+                  "value": {}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/canvases/{id}": {
+      "get": {
+        "operationId": "getCanvas",
+        "summary": "Read owned canvas",
+        "description": "Stored scene refs, not signed URLs. GET/refetch to recover/reconcile conflicts.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasDtoEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT",
+            "x-error-codes": [
+              "INVALID_INPUT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CANVAS_NOT_FOUND",
+            "x-error-codes": [
+              "CANVAS_NOT_FOUND"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_NOT_FOUND": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NOT_FOUND",
+                        "message": "CANVAS_NOT_FOUND"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            },
+            "description": "Owned live canvas UUID; foreign/deleted/missing are indistinguishable (404)."
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "updateCanvas",
+        "summary": "Replace scene or patch metadata with OCC",
+        "description": "Atomic revision increment and owner row lock. 409 requires GET/refetch/reconciliation, not blind stale-scene retry. Shared actor mutation budget 60/min.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasDtoEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT; CANVAS_SCENE_TOO_LARGE; CANVAS_NODE_LIMIT_EXCEEDED; CANVAS_EDGE_LIMIT_EXCEEDED; CANVAS_DUPLICATE_NODE_ID; CANVAS_DUPLICATE_EDGE_ID; CANVAS_DANGLING_REFERENCE",
+            "x-error-codes": [
+              "INVALID_INPUT",
+              "CANVAS_SCENE_TOO_LARGE",
+              "CANVAS_NODE_LIMIT_EXCEEDED",
+              "CANVAS_EDGE_LIMIT_EXCEEDED",
+              "CANVAS_DUPLICATE_NODE_ID",
+              "CANVAS_DUPLICATE_EDGE_ID",
+              "CANVAS_DANGLING_REFERENCE"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  },
+                  "CANVAS_SCENE_TOO_LARGE": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_SCENE_TOO_LARGE",
+                        "message": "CANVAS_SCENE_TOO_LARGE"
+                      }
+                    }
+                  },
+                  "CANVAS_NODE_LIMIT_EXCEEDED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NODE_LIMIT_EXCEEDED",
+                        "message": "CANVAS_NODE_LIMIT_EXCEEDED"
+                      }
+                    }
+                  },
+                  "CANVAS_EDGE_LIMIT_EXCEEDED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_EDGE_LIMIT_EXCEEDED",
+                        "message": "CANVAS_EDGE_LIMIT_EXCEEDED"
+                      }
+                    }
+                  },
+                  "CANVAS_DUPLICATE_NODE_ID": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_DUPLICATE_NODE_ID",
+                        "message": "CANVAS_DUPLICATE_NODE_ID"
+                      }
+                    }
+                  },
+                  "CANVAS_DUPLICATE_EDGE_ID": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_DUPLICATE_EDGE_ID",
+                        "message": "CANVAS_DUPLICATE_EDGE_ID"
+                      }
+                    }
+                  },
+                  "CANVAS_DANGLING_REFERENCE": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_DANGLING_REFERENCE",
+                        "message": "CANVAS_DANGLING_REFERENCE"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_REJECTED",
+            "x-error-codes": [
+              "CSRF_REJECTED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_REJECTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CSRF_REJECTED",
+                        "message": "CSRF_REJECTED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CANVAS_NOT_FOUND",
+            "x-error-codes": [
+              "CANVAS_NOT_FOUND"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_NOT_FOUND": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NOT_FOUND",
+                        "message": "CANVAS_NOT_FOUND"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CANVAS_REVISION_CONFLICT",
+            "x-error-codes": [
+              "CANVAS_REVISION_CONFLICT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_REVISION_CONFLICT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_REVISION_CONFLICT",
+                        "message": "CANVAS_REVISION_CONFLICT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "x-error-codes": [
+              "RATE_LIMITED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "RATE_LIMITED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            },
+            "description": "Owned live canvas UUID; foreign/deleted/missing are indistinguishable (404)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCanvasRequest"
+              },
+              "examples": {
+                "example1": {
+                  "value": {
+                    "baseRevision": 1,
+                    "title": "Example canvas v2",
+                    "scene": {
+                      "nodes": [
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000001",
+                          "type": "prompt",
+                          "position": {
+                            "x": 0,
+                            "y": 0
+                          },
+                          "data": {
+                            "prompt": "Synthetic example",
+                            "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                            "parameters": {
+                              "quality": "standard"
+                            }
+                          }
+                        },
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000002",
+                          "type": "image",
+                          "position": {
+                            "x": 240,
+                            "y": 0
+                          },
+                          "size": {
+                            "width": 200,
+                            "height": 200
+                          },
+                          "data": {
+                            "assetId": "123e4567-e89b-12d3-a456-000000000012",
+                            "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                            "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+                          }
+                        },
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000003",
+                          "type": "video",
+                          "position": {
+                            "x": 480,
+                            "y": 0
+                          },
+                          "data": {
+                            "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+                          }
+                        },
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000004",
+                          "type": "note",
+                          "position": {
+                            "x": 0,
+                            "y": 240
+                          },
+                          "data": {
+                            "text": "Example note"
+                          }
+                        }
+                      ],
+                      "edges": [
+                        {
+                          "id": "123e4567-e89b-12d3-a456-000000000005",
+                          "source": "123e4567-e89b-12d3-a456-000000000001",
+                          "target": "123e4567-e89b-12d3-a456-000000000002"
+                        }
+                      ]
+                    },
+                    "coverAssetId": null
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCanvas",
+        "summary": "Soft-delete owned canvas",
+        "description": "Returns {success:true,data:{id}}. Missing/foreign/already deleted 404. Referenced jobs/assets not deleted. Shared actor mutation budget 60/min.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCanvasEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT",
+            "x-error-codes": [
+              "INVALID_INPUT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_REJECTED",
+            "x-error-codes": [
+              "CSRF_REJECTED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_REJECTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CSRF_REJECTED",
+                        "message": "CSRF_REJECTED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CANVAS_NOT_FOUND",
+            "x-error-codes": [
+              "CANVAS_NOT_FOUND"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_NOT_FOUND": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NOT_FOUND",
+                        "message": "CANVAS_NOT_FOUND"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "x-error-codes": [
+              "RATE_LIMITED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "RATE_LIMITED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            },
+            "description": "Owned live canvas UUID; foreign/deleted/missing are indistinguishable (404)."
+          }
+        ]
+      }
+    },
+    "/api/canvases/{id}/agent/history": {
+      "get": {
+        "operationId": "getCanvasAgentHistory",
+        "summary": "Read history and pending snapshot",
+        "description": "Works even disabled. Shared actor agent limiter 30/min consumed by history too. afterSeq default 0; limit default 50/max 100. Decimal digits including leading zeros, repeated fields use first. Snapshot recovery, not SSE replay.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasAgentHistoryDtoEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT",
+            "x-error-codes": [
+              "INVALID_INPUT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "x-error-codes": [
+              "FORBIDDEN"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "FORBIDDEN": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FORBIDDEN",
+                        "message": "FORBIDDEN"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CANVAS_NOT_FOUND",
+            "x-error-codes": [
+              "CANVAS_NOT_FOUND"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_NOT_FOUND": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NOT_FOUND",
+                        "message": "CANVAS_NOT_FOUND"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "CANVAS_AGENT_RATE_LIMITED",
+            "x-error-codes": [
+              "CANVAS_AGENT_RATE_LIMITED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_RATE_LIMITED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_RATE_LIMITED",
+                        "message": "CANVAS_AGENT_RATE_LIMITED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "CANVAS_AGENT_FAILED",
+            "x-error-codes": [
+              "CANVAS_AGENT_FAILED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_FAILED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_FAILED",
+                        "message": "CANVAS_AGENT_FAILED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            },
+            "description": "Owned live canvas UUID; foreign/deleted/missing are indistinguishable (404)."
+          },
+          {
+            "name": "afterSeq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647,
+              "default": 0
+            },
+            "description": "Exclusive seq lower bound."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "description": "Maximum returned messages."
+          }
+        ]
+      }
+    },
+    "/api/canvases/{id}/agent/confirm": {
+      "post": {
+        "operationId": "postCanvasAgentConfirm",
+        "summary": "Approve/reject immutable pending job",
+        "description": "120000 ms confirmation timeout. Submitted replay returns same jobId/ops even approve=false. Claim commits before separate generation transaction; crash recovery reuses same persisted idempotency key/payload after lease expiry or links existing committed job. Approval validates revision, ready owned image source and media model/config digest; changes conflict/expire. Bounded pre-submit TOCTOU, NOT cross-transaction atomic validation: source/config/revision may change after claim before create. Disconnect does not revoke committed jobs. Shared actor limit 30/min.",
+        "tags": [
+          "Canvas"
+        ],
+        "x-access": "actor",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasAgentConfirmResultDtoEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT",
+            "x-error-codes": [
+              "INVALID_INPUT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_REJECTED; FORBIDDEN",
+            "x-error-codes": [
+              "CSRF_REJECTED",
+              "FORBIDDEN"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_REJECTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CSRF_REJECTED",
+                        "message": "CSRF_REJECTED"
+                      }
+                    }
+                  },
+                  "FORBIDDEN": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FORBIDDEN",
+                        "message": "FORBIDDEN"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CANVAS_NOT_FOUND; CANVAS_AGENT_CONFIRM_NOT_FOUND",
+            "x-error-codes": [
+              "CANVAS_NOT_FOUND",
+              "CANVAS_AGENT_CONFIRM_NOT_FOUND"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_NOT_FOUND": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_NOT_FOUND",
+                        "message": "CANVAS_NOT_FOUND"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_CONFIRM_NOT_FOUND": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_CONFIRM_NOT_FOUND",
+                        "message": "CANVAS_AGENT_CONFIRM_NOT_FOUND"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CANVAS_AGENT_DISABLED; CANVAS_AGENT_NOT_CONFIGURED; CANVAS_AGENT_MODEL_UNSUPPORTED; CANVAS_AGENT_CONFIRM_CONFLICT; CANVAS_AGENT_CONFIRM_EXPIRED; SOURCE_NOT_READY; CANVAS_AGENT_CANCELED",
+            "x-error-codes": [
+              "CANVAS_AGENT_DISABLED",
+              "CANVAS_AGENT_NOT_CONFIGURED",
+              "CANVAS_AGENT_MODEL_UNSUPPORTED",
+              "CANVAS_AGENT_CONFIRM_CONFLICT",
+              "CANVAS_AGENT_CONFIRM_EXPIRED",
+              "SOURCE_NOT_READY",
+              "CANVAS_AGENT_CANCELED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_DISABLED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_DISABLED",
+                        "message": "CANVAS_AGENT_DISABLED"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_NOT_CONFIGURED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_NOT_CONFIGURED",
+                        "message": "CANVAS_AGENT_NOT_CONFIGURED"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_MODEL_UNSUPPORTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_MODEL_UNSUPPORTED",
+                        "message": "CANVAS_AGENT_MODEL_UNSUPPORTED"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_CONFIRM_CONFLICT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_CONFIRM_CONFLICT",
+                        "message": "CANVAS_AGENT_CONFIRM_CONFLICT"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_CONFIRM_EXPIRED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_CONFIRM_EXPIRED",
+                        "message": "CANVAS_AGENT_CONFIRM_EXPIRED"
+                      }
+                    }
+                  },
+                  "SOURCE_NOT_READY": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "SOURCE_NOT_READY",
+                        "message": "SOURCE_NOT_READY"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_CANCELED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_CANCELED",
+                        "message": "CANVAS_AGENT_CANCELED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "CANVAS_AGENT_RATE_LIMITED",
+            "x-error-codes": [
+              "CANVAS_AGENT_RATE_LIMITED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_RATE_LIMITED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_RATE_LIMITED",
+                        "message": "CANVAS_AGENT_RATE_LIMITED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "CANVAS_AGENT_FAILED",
+            "x-error-codes": [
+              "CANVAS_AGENT_FAILED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_FAILED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_FAILED",
+                        "message": "CANVAS_AGENT_FAILED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            },
+            "description": "Owned live canvas UUID; foreign/deleted/missing are indistinguishable (404)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasAgentConfirmRequest"
+              },
+              "examples": {
+                "example1": {
+                  "value": {
+                    "pendingId": "123e4567-e89b-12d3-a456-000000000023",
+                    "approve": true
+                  }
+                },
+                "example2": {
+                  "value": {
+                    "pendingId": "123e4567-e89b-12d3-a456-000000000023",
+                    "approve": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/canvas-agent-settings": {
+      "get": {
+        "operationId": "readCanvasAgentSettings",
+        "summary": "Read safe agent configuration",
+        "description": "Admin only. Safe config UUID/limits, no credential/provider base URL/credential headers.",
+        "tags": [
+          "Canvas agent settings"
+        ],
+        "x-access": "admin",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasAgentSettingsDtoEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "x-error-codes": [
+              "FORBIDDEN"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "FORBIDDEN": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FORBIDDEN",
+                        "message": "FORBIDDEN"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "CANVAS_AGENT_FAILED",
+            "x-error-codes": [
+              "CANVAS_AGENT_FAILED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_FAILED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_FAILED",
+                        "message": "CANVAS_AGENT_FAILED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateCanvasAgentSettings",
+        "summary": "Partially update agent configuration",
+        "description": "Admin partial settings. Enabled requires active enabled builtin language model/stored enabled credential. Only builtin openai_chat/openai-language and anthropic_messages/anthropic-language; uploaded plugins/openai_responses unsupported. Anthropic reasoning effort absent/none. Non-null config validated even disabled. Defaults disabled/null/12 calls/4 jobs/120000 ms/3 auto continuations. Serialized singleton update and audit in one transaction; no settings-specific limiter.",
+        "tags": [
+          "Canvas agent settings"
+        ],
+        "x-access": "admin",
+        "security": [
+          {
+            "museSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasAgentSettingsDtoEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_INPUT",
+            "x-error-codes": [
+              "INVALID_INPUT"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INVALID_INPUT": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "INVALID_INPUT"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "x-error-codes": [
+              "UNAUTHORIZED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "UNAUTHORIZED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN; CSRF_REJECTED",
+            "x-error-codes": [
+              "FORBIDDEN",
+              "CSRF_REJECTED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "FORBIDDEN": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FORBIDDEN",
+                        "message": "FORBIDDEN"
+                      }
+                    }
+                  },
+                  "CSRF_REJECTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CSRF_REJECTED",
+                        "message": "CSRF_REJECTED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CANVAS_AGENT_NOT_CONFIGURED; CANVAS_AGENT_MODEL_UNSUPPORTED",
+            "x-error-codes": [
+              "CANVAS_AGENT_NOT_CONFIGURED",
+              "CANVAS_AGENT_MODEL_UNSUPPORTED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_NOT_CONFIGURED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_NOT_CONFIGURED",
+                        "message": "CANVAS_AGENT_NOT_CONFIGURED"
+                      }
+                    }
+                  },
+                  "CANVAS_AGENT_MODEL_UNSUPPORTED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_MODEL_UNSUPPORTED",
+                        "message": "CANVAS_AGENT_MODEL_UNSUPPORTED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "CANVAS_AGENT_FAILED",
+            "x-error-codes": [
+              "CANVAS_AGENT_FAILED"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CANVAS_AGENT_FAILED": {
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CANVAS_AGENT_FAILED",
+                        "message": "CANVAS_AGENT_FAILED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCanvasAgentSettingsRequest"
+              },
+              "examples": {
+                "example1": {
+                  "value": {
+                    "enabled": false,
+                    "languageModelConfigId": null,
+                    "maxToolCallsPerTurn": 12,
+                    "maxJobsPerTurn": 4,
+                    "timeoutMs": 120000,
+                    "maxAutoContinuations": 3
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Uuid": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+        "description": "Hex UUID, any version; case-insensitive input normalized to lowercase."
+      },
+      "NullableUuid": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "Revision": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991,
+        "description": "Initially 1, atomically incremented on PATCH; stale baseRevision is 409. GET/refetch and reconcile before retrying."
+      },
+      "Timestamp": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "Text": {
+        "type": "string",
+        "maxLength": 16000,
+        "x-max-utf16-code-units": 16000,
+        "description": "16000 UTF-16 code units, stricter than code-point maxLength for astral text. NUL/unpaired surrogates rejected; empty scene text allowed."
+      },
+      "TitleInput": {
+        "type": "string",
+        "pattern": "\\S",
+        "x-max-trimmed-length": 120,
+        "default": "未命名画布",
+        "description": "Trim first, then 1..120 UTF-16 code units. Missing defaults on create only. NUL/unpaired surrogates rejected; surrounding whitespace does not count."
+      },
+      "JsonValue": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JsonValue"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            }
+          }
+        ]
+      },
+      "JsonObject": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "description": "Legitimately dynamic JSON object, not a typed DTO placeholder."
+      },
+      "Parameters": {
+        "$ref": "#/components/schemas/JsonObject",
+        "x-max-utf8-bytes": 32768,
+        "x-max-depth": 8,
+        "x-max-json-values": 4096,
+        "description": "Serialized UTF-8 <=32 KiB; depth <=8 (root 0), <=4096 visited values including containers. Runtime rejects cycles, nonfinite numbers, nonplain objects/arrays, sparse arrays/accessors, NUL/unpaired surrogates and __proto__/prototype/constructor keys at every depth. Extensions are runtime constraints, not standard JSON Schema keywords.",
+        "x-runtime-invalid-examples": [
+          {
+            "constructor": "forbidden"
+          }
+        ],
+        "examples": [
+          {},
+          {
+            "seed": 42,
+            "nested": {
+              "enabled": true,
+              "values": [
+                1,
+                null,
+                "example"
+              ]
+            }
+          }
+        ]
+      },
+      "CanvasPosition": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "additionalProperties": false,
+        "description": "Finite coordinates, negatives allowed."
+      },
+      "CanvasSize": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasPromptData": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "$ref": "#/components/schemas/Text"
+          },
+          "modelId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasMediaData": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "sourceNodeId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/Text"
+          },
+          "modelId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "description": "Optional UUID refs, never URLs/null. Assets/jobs owned and matching kind; media models enabled, not actor-owned. sourceNodeId must exist. Media URLs resolved separately, never stored."
+      },
+      "CanvasNoteData": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "$ref": "#/components/schemas/Text"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasPromptNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "type": {
+            "type": "string",
+            "const": "prompt"
+          },
+          "position": {
+            "$ref": "#/components/schemas/CanvasPosition"
+          },
+          "size": {
+            "$ref": "#/components/schemas/CanvasSize"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasPromptData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "position",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasImageNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "type": {
+            "type": "string",
+            "const": "image"
+          },
+          "position": {
+            "$ref": "#/components/schemas/CanvasPosition"
+          },
+          "size": {
+            "$ref": "#/components/schemas/CanvasSize"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasMediaData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "position",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasVideoNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "type": {
+            "type": "string",
+            "const": "video"
+          },
+          "position": {
+            "$ref": "#/components/schemas/CanvasPosition"
+          },
+          "size": {
+            "$ref": "#/components/schemas/CanvasSize"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasMediaData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "position",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasNoteNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "type": {
+            "type": "string",
+            "const": "note"
+          },
+          "position": {
+            "$ref": "#/components/schemas/CanvasPosition"
+          },
+          "size": {
+            "$ref": "#/components/schemas/CanvasSize"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasNoteData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "position",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasNode": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CanvasPromptNode"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasImageNode"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasVideoNode"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasNoteNode"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "prompt": "#/components/schemas/CanvasPromptNode",
+            "image": "#/components/schemas/CanvasImageNode",
+            "video": "#/components/schemas/CanvasVideoNode",
+            "note": "#/components/schemas/CanvasNoteNode"
+          }
+        },
+        "examples": [
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000001",
+            "type": "prompt",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "data": {
+              "prompt": "Synthetic example",
+              "modelId": "123e4567-e89b-12d3-a456-000000000011",
+              "parameters": {
+                "quality": "standard"
+              }
+            }
+          },
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000002",
+            "type": "image",
+            "position": {
+              "x": 240,
+              "y": 0
+            },
+            "size": {
+              "width": 200,
+              "height": 200
+            },
+            "data": {
+              "assetId": "123e4567-e89b-12d3-a456-000000000012",
+              "jobId": "123e4567-e89b-12d3-a456-000000000013",
+              "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+            }
+          },
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000003",
+            "type": "video",
+            "position": {
+              "x": 480,
+              "y": 0
+            },
+            "data": {
+              "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+            }
+          },
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000004",
+            "type": "note",
+            "position": {
+              "x": 0,
+              "y": 240
+            },
+            "data": {
+              "text": "Example note"
+            }
+          }
+        ],
+        "x-runtime-invalid-examples": [
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000004",
+            "type": "note",
+            "position": {
+              "x": 0,
+              "y": 240
+            },
+            "data": {
+              "text": "ok",
+              "url": "https://example.invalid"
+            }
+          },
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000001",
+            "type": "prompt",
+            "position": {
+              "x": 0
+            },
+            "data": {
+              "prompt": "Synthetic example",
+              "modelId": "123e4567-e89b-12d3-a456-000000000011",
+              "parameters": {
+                "quality": "standard"
+              }
+            }
+          },
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000002",
+            "type": "image",
+            "position": {
+              "x": 240,
+              "y": 0
+            },
+            "size": {
+              "width": 200,
+              "height": 200
+            },
+            "data": {
+              "assetId": null
+            }
+          }
+        ]
+      },
+      "CanvasEdge": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasScene": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasNode"
+            },
+            "maxItems": 500
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasEdge"
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "additionalProperties": false,
+        "x-max-utf8-bytes": 524288,
+        "default": {
+          "nodes": [],
+          "edges": []
+        },
+        "description": "Submitted AND normalized serialized UTF-8 <=512 KiB. Unique node/edge IDs; all endpoints/sourceNodeId refs must exist. Newly introduced asset/job refs must be active/owned and models enabled; retained stored owner refs may remain soft-deleted/disabled placeholders, not authorization grants. Concurrent deletion after validation can leave a placeholder. Unknown typed fields rejected; URLs not stored.",
+        "examples": [
+          {
+            "nodes": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000001",
+                "type": "prompt",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "data": {
+                  "prompt": "Synthetic example",
+                  "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                  "parameters": {
+                    "quality": "standard"
+                  }
+                }
+              },
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000002",
+                "type": "image",
+                "position": {
+                  "x": 240,
+                  "y": 0
+                },
+                "size": {
+                  "width": 200,
+                  "height": 200
+                },
+                "data": {
+                  "assetId": "123e4567-e89b-12d3-a456-000000000012",
+                  "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                  "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+                }
+              },
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000003",
+                "type": "video",
+                "position": {
+                  "x": 480,
+                  "y": 0
+                },
+                "data": {
+                  "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+                }
+              },
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000004",
+                "type": "note",
+                "position": {
+                  "x": 0,
+                  "y": 240
+                },
+                "data": {
+                  "text": "Example note"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000005",
+                "source": "123e4567-e89b-12d3-a456-000000000001",
+                "target": "123e4567-e89b-12d3-a456-000000000002"
+              }
+            ]
+          }
+        ],
+        "x-runtime-invalid-examples": [
+          {
+            "nodes": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000001",
+                "type": "prompt",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "data": {
+                  "prompt": "Synthetic example",
+                  "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                  "parameters": {
+                    "quality": "standard"
+                  }
+                }
+              },
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000001",
+                "type": "prompt",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "data": {
+                  "prompt": "Synthetic example",
+                  "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                  "parameters": {
+                    "quality": "standard"
+                  }
+                }
+              }
+            ],
+            "edges": []
+          },
+          {
+            "nodes": [],
+            "edges": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000005",
+                "source": "123e4567-e89b-12d3-a456-000000000001",
+                "target": "123e4567-e89b-12d3-a456-000000000002"
+              }
+            ]
+          }
+        ]
+      },
+      "CanvasListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "coverAssetId": {
+            "$ref": "#/components/schemas/NullableUuid"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "revision",
+          "coverAssetId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "coverAssetId": {
+            "$ref": "#/components/schemas/NullableUuid"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/CanvasScene"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "revision",
+          "coverAssetId",
+          "createdAt",
+          "updatedAt",
+          "scene"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "id": "123e4567-e89b-12d3-a456-000000000030",
+            "title": "Example canvas",
+            "revision": 1,
+            "coverAssetId": null,
+            "createdAt": "2026-10-05T12:00:00.000Z",
+            "updatedAt": "2026-10-05T12:00:00.000Z",
+            "scene": {
+              "nodes": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000001",
+                  "type": "prompt",
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "data": {
+                    "prompt": "Synthetic example",
+                    "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                    "parameters": {
+                      "quality": "standard"
+                    }
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000002",
+                  "type": "image",
+                  "position": {
+                    "x": 240,
+                    "y": 0
+                  },
+                  "size": {
+                    "width": 200,
+                    "height": 200
+                  },
+                  "data": {
+                    "assetId": "123e4567-e89b-12d3-a456-000000000012",
+                    "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                    "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000003",
+                  "type": "video",
+                  "position": {
+                    "x": 480,
+                    "y": 0
+                  },
+                  "data": {
+                    "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000004",
+                  "type": "note",
+                  "position": {
+                    "x": 0,
+                    "y": 240
+                  },
+                  "data": {
+                    "text": "Example note"
+                  }
+                }
+              ],
+              "edges": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000005",
+                  "source": "123e4567-e89b-12d3-a456-000000000001",
+                  "target": "123e4567-e89b-12d3-a456-000000000002"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "CanvasListPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasListItemDto"
+            },
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque base64url (updatedAt,id) tuple, descending order. Preserve exactly; null means end, not a snapshot guarantee."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "items": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000030",
+                "title": "Example canvas",
+                "revision": 1,
+                "coverAssetId": null,
+                "createdAt": "2026-10-05T12:00:00.000Z",
+                "updatedAt": "2026-10-05T12:00:00.000Z"
+              }
+            ],
+            "nextCursor": null
+          }
+        ]
+      },
+      "CreateCanvasRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "$ref": "#/components/schemas/TitleInput"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/CanvasScene"
+          },
+          "coverAssetId": {
+            "$ref": "#/components/schemas/NullableUuid",
+            "default": null,
+            "description": "Owned image UUID/null to clear. Missing: null on create, unchanged on PATCH."
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "title": "  Example canvas  ",
+            "scene": {
+              "nodes": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000001",
+                  "type": "prompt",
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "data": {
+                    "prompt": "Synthetic example",
+                    "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                    "parameters": {
+                      "quality": "standard"
+                    }
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000002",
+                  "type": "image",
+                  "position": {
+                    "x": 240,
+                    "y": 0
+                  },
+                  "size": {
+                    "width": 200,
+                    "height": 200
+                  },
+                  "data": {
+                    "assetId": "123e4567-e89b-12d3-a456-000000000012",
+                    "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                    "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000003",
+                  "type": "video",
+                  "position": {
+                    "x": 480,
+                    "y": 0
+                  },
+                  "data": {
+                    "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000004",
+                  "type": "note",
+                  "position": {
+                    "x": 0,
+                    "y": 240
+                  },
+                  "data": {
+                    "text": "Example note"
+                  }
+                }
+              ],
+              "edges": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000005",
+                  "source": "123e4567-e89b-12d3-a456-000000000001",
+                  "target": "123e4567-e89b-12d3-a456-000000000002"
+                }
+              ]
+            },
+            "coverAssetId": null
+          },
+          {}
+        ],
+        "x-runtime-invalid-examples": [
+          {
+            "title": "   "
+          },
+          {
+            "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          {
+            "coverAssetId": "https://example.invalid/image"
+          },
+          {
+            "scene": {
+              "nodes": [],
+              "edges": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000005",
+                  "source": "123e4567-e89b-12d3-a456-000000000001",
+                  "target": "123e4567-e89b-12d3-a456-000000000002"
+                }
+              ]
+            }
+          },
+          {
+            "unknown": true
+          }
+        ]
+      },
+      "UpdateCanvasRequest": {
+        "type": "object",
+        "properties": {
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "title": {
+            "$ref": "#/components/schemas/TitleInput"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/CanvasScene"
+          },
+          "coverAssetId": {
+            "$ref": "#/components/schemas/NullableUuid",
+            "default": null,
+            "description": "Owned image UUID/null to clear. Missing: null on create, unchanged on PATCH."
+          }
+        },
+        "required": [
+          "baseRevision"
+        ],
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "title"
+            ]
+          },
+          {
+            "required": [
+              "scene"
+            ]
+          },
+          {
+            "required": [
+              "coverAssetId"
+            ]
+          }
+        ],
+        "description": "Nonempty field patch plus revision; scene replaces full scene. Metadata changes also increment revision. Revision checked before references.",
+        "examples": [
+          {
+            "baseRevision": 1,
+            "title": "Example canvas v2",
+            "scene": {
+              "nodes": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000001",
+                  "type": "prompt",
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "data": {
+                    "prompt": "Synthetic example",
+                    "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                    "parameters": {
+                      "quality": "standard"
+                    }
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000002",
+                  "type": "image",
+                  "position": {
+                    "x": 240,
+                    "y": 0
+                  },
+                  "size": {
+                    "width": 200,
+                    "height": 200
+                  },
+                  "data": {
+                    "assetId": "123e4567-e89b-12d3-a456-000000000012",
+                    "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                    "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000003",
+                  "type": "video",
+                  "position": {
+                    "x": 480,
+                    "y": 0
+                  },
+                  "data": {
+                    "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000004",
+                  "type": "note",
+                  "position": {
+                    "x": 0,
+                    "y": 240
+                  },
+                  "data": {
+                    "text": "Example note"
+                  }
+                }
+              ],
+              "edges": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000005",
+                  "source": "123e4567-e89b-12d3-a456-000000000001",
+                  "target": "123e4567-e89b-12d3-a456-000000000002"
+                }
+              ]
+            },
+            "coverAssetId": null
+          }
+        ],
+        "x-runtime-invalid-examples": [
+          {
+            "baseRevision": 1
+          },
+          {
+            "baseRevision": 0,
+            "title": "Example"
+          },
+          {
+            "baseRevision": 1,
+            "scene": {
+              "nodes": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000001",
+                  "type": "prompt",
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "data": {
+                    "prompt": "Synthetic example",
+                    "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                    "parameters": {
+                      "quality": "standard"
+                    }
+                  }
+                },
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000001",
+                  "type": "prompt",
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "data": {
+                    "prompt": "Synthetic example",
+                    "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                    "parameters": {
+                      "quality": "standard"
+                    }
+                  }
+                }
+              ],
+              "edges": []
+            }
+          }
+        ]
+      },
+      "CanvasNodeDataPatch": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "sourceNodeId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/Text"
+          },
+          "modelId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          },
+          "text": {
+            "$ref": "#/components/schemas/Text"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Merge fields; parameters replaces whole object. Target discriminator authoritative, incompatible keys fail when applied. Refs cannot be cleared with null."
+      },
+      "CanvasNodePatch": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "$ref": "#/components/schemas/CanvasPosition"
+          },
+          "size": {
+            "$ref": "#/components/schemas/CanvasSize"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasNodeDataPatch"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1
+      },
+      "CanvasOp_add_node": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "add_node"
+          },
+          "node": {
+            "$ref": "#/components/schemas/CanvasNode"
+          }
+        },
+        "required": [
+          "type",
+          "node"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasOp_update_node": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "update_node"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "patch": {
+            "$ref": "#/components/schemas/CanvasNodePatch"
+          }
+        },
+        "required": [
+          "type",
+          "nodeId",
+          "patch"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasOp_remove_node": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_node"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "required": [
+          "type",
+          "nodeId"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasOp_connect": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "connect"
+          },
+          "edge": {
+            "$ref": "#/components/schemas/CanvasEdge"
+          }
+        },
+        "required": [
+          "type",
+          "edge"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasOp_disconnect": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "disconnect"
+          },
+          "edgeId": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "required": [
+          "type",
+          "edgeId"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasOp_arrange": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "arrange"
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "nodeId": {
+                  "$ref": "#/components/schemas/Uuid"
+                },
+                "position": {
+                  "$ref": "#/components/schemas/CanvasPosition"
+                }
+              },
+              "required": [
+                "nodeId",
+                "position"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "description": "Unique nodeIds."
+          }
+        },
+        "required": [
+          "type",
+          "positions"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasOp": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CanvasOp_add_node"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasOp_update_node"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasOp_remove_node"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasOp_connect"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasOp_disconnect"
+          },
+          {
+            "$ref": "#/components/schemas/CanvasOp_arrange"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "add_node": "#/components/schemas/CanvasOp_add_node",
+            "update_node": "#/components/schemas/CanvasOp_update_node",
+            "remove_node": "#/components/schemas/CanvasOp_remove_node",
+            "connect": "#/components/schemas/CanvasOp_connect",
+            "disconnect": "#/components/schemas/CanvasOp_disconnect",
+            "arrange": "#/components/schemas/CanvasOp_arrange"
+          }
+        },
+        "description": "Ordered detached application, each intermediate scene valid; no partial batch, missing targets fail. remove_node clears incident edges/source refs. Agent proposes ops only, client applies then persists via OCC PATCH.",
+        "examples": [
+          {
+            "type": "add_node",
+            "node": {
+              "id": "123e4567-e89b-12d3-a456-000000000006",
+              "type": "note",
+              "position": {
+                "x": 0,
+                "y": 240
+              },
+              "data": {
+                "text": "Example note"
+              }
+            }
+          },
+          {
+            "type": "update_node",
+            "nodeId": "123e4567-e89b-12d3-a456-000000000001",
+            "patch": {
+              "data": {
+                "prompt": "Revised example",
+                "parameters": {}
+              }
+            }
+          },
+          {
+            "type": "remove_node",
+            "nodeId": "123e4567-e89b-12d3-a456-000000000004"
+          },
+          {
+            "type": "connect",
+            "edge": {
+              "id": "123e4567-e89b-12d3-a456-000000000007",
+              "source": "123e4567-e89b-12d3-a456-000000000001",
+              "target": "123e4567-e89b-12d3-a456-000000000003"
+            }
+          },
+          {
+            "type": "disconnect",
+            "edgeId": "123e4567-e89b-12d3-a456-000000000005"
+          },
+          {
+            "type": "arrange",
+            "positions": [
+              {
+                "nodeId": "123e4567-e89b-12d3-a456-000000000001",
+                "position": {
+                  "x": 10,
+                  "y": 20
+                }
+              }
+            ]
+          }
+        ],
+        "x-runtime-invalid-examples": [
+          {
+            "type": "update_node",
+            "nodeId": "123e4567-e89b-12d3-a456-000000000001",
+            "patch": {}
+          },
+          {
+            "type": "arrange",
+            "positions": []
+          }
+        ]
+      },
+      "CanvasOps": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CanvasOp"
+        },
+        "maxItems": 1000,
+        "examples": [
+          [
+            {
+              "type": "add_node",
+              "node": {
+                "id": "123e4567-e89b-12d3-a456-000000000006",
+                "type": "note",
+                "position": {
+                  "x": 0,
+                  "y": 240
+                },
+                "data": {
+                  "text": "Example note"
+                }
+              }
+            },
+            {
+              "type": "update_node",
+              "nodeId": "123e4567-e89b-12d3-a456-000000000001",
+              "patch": {
+                "data": {
+                  "prompt": "Revised example",
+                  "parameters": {}
+                }
+              }
+            },
+            {
+              "type": "remove_node",
+              "nodeId": "123e4567-e89b-12d3-a456-000000000004"
+            },
+            {
+              "type": "connect",
+              "edge": {
+                "id": "123e4567-e89b-12d3-a456-000000000007",
+                "source": "123e4567-e89b-12d3-a456-000000000001",
+                "target": "123e4567-e89b-12d3-a456-000000000003"
+              }
+            },
+            {
+              "type": "disconnect",
+              "edgeId": "123e4567-e89b-12d3-a456-000000000005"
+            },
+            {
+              "type": "arrange",
+              "positions": [
+                {
+                  "nodeId": "123e4567-e89b-12d3-a456-000000000001",
+                  "position": {
+                    "x": 10,
+                    "y": 20
+                  }
+                }
+              ]
+            }
+          ]
+        ],
+        "x-runtime-invalid-examples": [
+          [
+            {
+              "type": "remove_node",
+              "nodeId": "not-uuid"
+            }
+          ]
+        ],
+        "description": "Example batch applies to CanvasScene example in order and validates every intermediate scene."
+      },
+      "AgentUserRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "user"
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "text": {
+            "$ref": "#/components/schemas/Text",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "requireConfirmation": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "kind",
+          "messageId",
+          "text",
+          "baseRevision"
+        ],
+        "additionalProperties": false,
+        "description": "Strict body. messageId is durable request identity, not event ID; different digest with same ID conflicts. Defaults confirmation true; explicit false opts into auto-submit. The automatic continuation count is session-scoped; new user turns do not reset it."
+      },
+      "AgentJobEventRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "job_event"
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "kind",
+          "messageId",
+          "jobId",
+          "baseRevision"
+        ],
+        "additionalProperties": false,
+        "description": "Strict: no text/status/assets/requireConfirmation claims. Server verifies owned session-linked job terminal succeeded/failed/canceled, succeeded requires ready assets. Server builds trusted summary. Inherits confirmation flag; automatic count bounded by settings, default max 3. Duplicate job/message identities conflict as durable state dictates."
+      },
+      "CanvasAgentMessageRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AgentUserRequest"
+          },
+          {
+            "$ref": "#/components/schemas/AgentJobEventRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "user": "#/components/schemas/AgentUserRequest",
+            "job_event": "#/components/schemas/AgentJobEventRequest"
+          }
+        },
+        "examples": [
+          {
+            "kind": "user",
+            "messageId": "123e4567-e89b-12d3-a456-000000000021",
+            "text": "Arrange these example nodes",
+            "baseRevision": 2
+          },
+          {
+            "kind": "job_event",
+            "messageId": "123e4567-e89b-12d3-a456-000000000022",
+            "jobId": "123e4567-e89b-12d3-a456-000000000013",
+            "baseRevision": 2
+          },
+          {
+            "kind": "user",
+            "messageId": "123e4567-e89b-12d3-a456-000000000025",
+            "text": "Arrange these example nodes",
+            "baseRevision": 2,
+            "requireConfirmation": false
+          }
+        ],
+        "x-runtime-invalid-examples": [
+          {
+            "kind": "user",
+            "messageId": "123e4567-e89b-12d3-a456-000000000021",
+            "text": " ",
+            "baseRevision": 2
+          },
+          {
+            "kind": "job_event",
+            "messageId": "123e4567-e89b-12d3-a456-000000000022",
+            "jobId": "123e4567-e89b-12d3-a456-000000000013",
+            "baseRevision": 2,
+            "requireConfirmation": false
+          },
+          {
+            "kind": "job_event",
+            "messageId": "123e4567-e89b-12d3-a456-000000000022",
+            "jobId": "123e4567-e89b-12d3-a456-000000000013",
+            "baseRevision": 2,
+            "status": "succeeded"
+          },
+          {
+            "kind": "user",
+            "messageId": "123e4567-e89b-12d3-a456-000000000021",
+            "text": "Arrange these example nodes",
+            "baseRevision": 0
+          }
+        ]
+      },
+      "CanvasAgentConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "pendingId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "approve": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pendingId",
+          "approve"
+        ],
+        "additionalProperties": false,
+        "description": "Only pendingId/approve; no override of immutable model/prompt/parameters/source, ops or job outcome claims.",
+        "examples": [
+          {
+            "pendingId": "123e4567-e89b-12d3-a456-000000000023",
+            "approve": true
+          },
+          {
+            "pendingId": "123e4567-e89b-12d3-a456-000000000023",
+            "approve": false
+          }
+        ],
+        "x-runtime-invalid-examples": [
+          {
+            "pendingId": "123e4567-e89b-12d3-a456-000000000023",
+            "approve": true,
+            "prompt": "override"
+          },
+          {
+            "pendingId": "123e4567-e89b-12d3-a456-000000000023",
+            "approve": "yes"
+          }
+        ]
+      },
+      "CanvasAgentPendingJobDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "toolCallId": {
+            "type": "string",
+            "description": "Public provider-local call ID, not necessarily UUID."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ]
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/Text"
+          },
+          "modelId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          },
+          "sourceNodeId": {
+            "$ref": "#/components/schemas/NullableUuid"
+          },
+          "sourceAssetId": {
+            "$ref": "#/components/schemas/NullableUuid"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "submitting",
+              "submitted",
+              "rejected",
+              "expired"
+            ]
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/NullableUuid"
+          }
+        },
+        "required": [
+          "id",
+          "toolCallId",
+          "kind",
+          "prompt",
+          "modelId",
+          "parameters",
+          "sourceNodeId",
+          "sourceAssetId",
+          "createdAt",
+          "expiresAt",
+          "status",
+          "jobId"
+        ],
+        "additionalProperties": false,
+        "description": "Immutable generation inputs. pending -> submitting -> submitted or pending -> rejected/expired. Lease expiry permits submitting recovery with same persisted key/payload. Submitted replay stable even if approve=false. Public DTO excludes internal digest/idempotency key/lease; no credentials/URLs. Newly created pending work expires after 15 minutes; deadlines checked by durable state. Generation inputs immutable; only lifecycle status/jobId advance."
+      },
+      "CanvasAgentConfirmResultDto": {
+        "type": "object",
+        "properties": {
+          "pending": {
+            "$ref": "#/components/schemas/CanvasAgentPendingJobDto"
+          },
+          "ops": {
+            "$ref": "#/components/schemas/CanvasOps"
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/NullableUuid"
+          }
+        },
+        "required": [
+          "pending",
+          "ops",
+          "jobId"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "pending": {
+              "id": "123e4567-e89b-12d3-a456-000000000023",
+              "toolCallId": "call_example",
+              "kind": "image",
+              "prompt": "Synthetic example",
+              "modelId": "123e4567-e89b-12d3-a456-000000000011",
+              "parameters": {},
+              "sourceNodeId": null,
+              "sourceAssetId": null,
+              "createdAt": "2026-10-05T12:00:00.000Z",
+              "expiresAt": "2026-10-05T12:15:00.000Z",
+              "status": "submitted",
+              "jobId": "123e4567-e89b-12d3-a456-000000000013"
+            },
+            "ops": [
+              {
+                "type": "add_node",
+                "node": {
+                  "id": "123e4567-e89b-12d3-a456-000000000051",
+                  "type": "image",
+                  "position": {
+                    "x": 320,
+                    "y": 0
+                  },
+                  "data": {
+                    "prompt": "Synthetic example",
+                    "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                    "parameters": {},
+                    "jobId": "123e4567-e89b-12d3-a456-000000000013"
+                  }
+                }
+              }
+            ],
+            "jobId": "123e4567-e89b-12d3-a456-000000000013"
+          }
+        ]
+      },
+      "CanvasAgentToolCallDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "$ref": "#/components/schemas/JsonObject"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "arguments"
+        ],
+        "additionalProperties": false
+      },
+      "CanvasAgentUsageDto": {
+        "type": "object",
+        "properties": {
+          "inputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "inputTokens",
+          "outputTokens"
+        ],
+        "additionalProperties": false
+      },
+      "AgentMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "tool"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "toolCalls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasAgentToolCallDto"
+            }
+          },
+          "ops": {
+            "$ref": "#/components/schemas/CanvasOps"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CanvasAgentUsageDto"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "role",
+          "content",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "description": "Ascending session seq. Server summaries stored as user. Empty toolCalls/ops omitted. Persisted assistant calls paired with tool results, interrupted calls not orphaned. Usage optional."
+      },
+      "CanvasAgentHistoryDto": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMessageDto"
+            },
+            "maxItems": 100
+          },
+          "pendingJobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasAgentPendingJobDto"
+            }
+          },
+          "requireConfirmation": {
+            "type": "boolean"
+          },
+          "autoContinuationCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "nextAfterSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "sessionId",
+          "messages",
+          "pendingJobs",
+          "requireConfirmation",
+          "autoContinuationCount",
+          "nextAfterSeq"
+        ],
+        "additionalProperties": false,
+        "description": "Ascending messages seq > afterSeq, nextAfterSeq null at end. Pending jobs are whole session snapshot, not message page bound. Creates session if needed. Recover with GET canvas, not SSE replay.",
+        "examples": [
+          {
+            "sessionId": "123e4567-e89b-12d3-a456-000000000032",
+            "messages": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000024",
+                "seq": 2,
+                "role": "assistant",
+                "content": "Example response",
+                "createdAt": "2026-10-05T12:00:00.000Z"
+              }
+            ],
+            "pendingJobs": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000023",
+                "toolCallId": "call_example",
+                "kind": "image",
+                "prompt": "Synthetic example",
+                "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                "parameters": {},
+                "sourceNodeId": null,
+                "sourceAssetId": null,
+                "createdAt": "2026-10-05T12:00:00.000Z",
+                "expiresAt": "2026-10-05T12:15:00.000Z",
+                "status": "pending",
+                "jobId": null
+              }
+            ],
+            "requireConfirmation": true,
+            "autoContinuationCount": 0,
+            "nextAfterSeq": null
+          }
+        ]
+      },
+      "CanvasAgentSettingsDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "languageModelConfigId": {
+            "$ref": "#/components/schemas/NullableUuid",
+            "default": null
+          },
+          "maxToolCallsPerTurn": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32,
+            "default": 12
+          },
+          "maxJobsPerTurn": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "default": 4
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 300000,
+            "default": 120000
+          },
+          "maxAutoContinuations": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "default": 3
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "enabled",
+          "languageModelConfigId",
+          "maxToolCallsPerTurn",
+          "maxJobsPerTurn",
+          "timeoutMs",
+          "maxAutoContinuations",
+          "updatedAt"
+        ],
+        "additionalProperties": false,
+        "description": "Admin partial settings. Enabled requires active enabled builtin language model/stored enabled credential. Only builtin openai_chat/openai-language and anthropic_messages/anthropic-language; uploaded plugins/openai_responses unsupported. Anthropic reasoning effort absent/none. Non-null config validated even disabled. Defaults disabled/null/12 calls/4 jobs/120000 ms/3 auto continuations.",
+        "examples": [
+          {
+            "enabled": false,
+            "languageModelConfigId": null,
+            "maxToolCallsPerTurn": 12,
+            "maxJobsPerTurn": 4,
+            "timeoutMs": 120000,
+            "maxAutoContinuations": 3,
+            "updatedAt": "2026-10-05T12:00:00.000Z"
+          }
+        ]
+      },
+      "UpdateCanvasAgentSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "languageModelConfigId": {
+            "$ref": "#/components/schemas/NullableUuid",
+            "default": null
+          },
+          "maxToolCallsPerTurn": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32,
+            "default": 12
+          },
+          "maxJobsPerTurn": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "default": 4
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 300000,
+            "default": 120000
+          },
+          "maxAutoContinuations": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "default": 3
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Admin partial settings. Enabled requires active enabled builtin language model/stored enabled credential. Only builtin openai_chat/openai-language and anthropic_messages/anthropic-language; uploaded plugins/openai_responses unsupported. Anthropic reasoning effort absent/none. Non-null config validated even disabled. Defaults disabled/null/12 calls/4 jobs/120000 ms/3 auto continuations.",
+        "examples": [
+          {
+            "enabled": false,
+            "languageModelConfigId": null,
+            "maxToolCallsPerTurn": 12,
+            "maxJobsPerTurn": 4,
+            "timeoutMs": 120000,
+            "maxAutoContinuations": 3
+          }
+        ],
+        "x-runtime-invalid-examples": [
+          {},
+          {
+            "maxToolCallsPerTurn": 33
+          },
+          {
+            "maxJobsPerTurn": 9
+          },
+          {
+            "timeoutMs": 999
+          },
+          {
+            "maxAutoContinuations": 11
+          },
+          {
+            "language_protocol": "openai_responses"
+          }
+        ]
+      },
+      "CanvasErrorCode": {
+        "type": "string",
+        "enum": [
+          "INVALID_INPUT",
+          "CANVAS_NOT_FOUND",
+          "CANVAS_REVISION_CONFLICT",
+          "CANVAS_SCENE_TOO_LARGE",
+          "CANVAS_NODE_LIMIT_EXCEEDED",
+          "CANVAS_EDGE_LIMIT_EXCEEDED",
+          "CANVAS_NODE_NOT_FOUND",
+          "CANVAS_EDGE_NOT_FOUND",
+          "CANVAS_DUPLICATE_NODE_ID",
+          "CANVAS_DUPLICATE_EDGE_ID",
+          "CANVAS_DANGLING_REFERENCE",
+          "CANVAS_AGENT_DISABLED",
+          "CANVAS_AGENT_NOT_CONFIGURED",
+          "CANVAS_AGENT_MODEL_UNSUPPORTED",
+          "CANVAS_AGENT_BUSY",
+          "CANVAS_AGENT_BUDGET_EXCEEDED",
+          "CANVAS_AGENT_AUTO_CONTINUATION_LIMIT",
+          "CANVAS_AGENT_TIMEOUT",
+          "CANVAS_AGENT_CANCELED",
+          "CANVAS_AGENT_FAILED",
+          "CANVAS_AGENT_RATE_LIMITED",
+          "CANVAS_AGENT_MESSAGE_CONFLICT",
+          "CANVAS_AGENT_CONFIRM_NOT_FOUND",
+          "CANVAS_AGENT_CONFIRM_EXPIRED",
+          "CANVAS_AGENT_CONFIRM_CONFLICT",
+          "SOURCE_NOT_READY"
+        ]
+      },
+      "ParameterErrorDetails": {
+        "type": "object",
+        "properties": {
+          "parameter": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "constraint": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "$ref": "#/components/schemas/ParameterErrorDetails"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "success",
+          "error"
+        ],
+        "additionalProperties": false,
+        "description": "JSON pre-stream failures; canvas handlers currently omit details. Per-operation status code lists describe this subset.",
+        "examples": [
+          {
+            "success": false,
+            "error": {
+              "code": "CANVAS_REVISION_CONFLICT",
+              "message": "Canvas changed; refetch"
+            }
+          }
+        ]
+      },
+      "CanvasDtoEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasDto"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "id": "123e4567-e89b-12d3-a456-000000000030",
+              "title": "Example canvas",
+              "revision": 1,
+              "coverAssetId": null,
+              "createdAt": "2026-10-05T12:00:00.000Z",
+              "updatedAt": "2026-10-05T12:00:00.000Z",
+              "scene": {
+                "nodes": [
+                  {
+                    "id": "123e4567-e89b-12d3-a456-000000000001",
+                    "type": "prompt",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "data": {
+                      "prompt": "Synthetic example",
+                      "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                      "parameters": {
+                        "quality": "standard"
+                      }
+                    }
+                  },
+                  {
+                    "id": "123e4567-e89b-12d3-a456-000000000002",
+                    "type": "image",
+                    "position": {
+                      "x": 240,
+                      "y": 0
+                    },
+                    "size": {
+                      "width": 200,
+                      "height": 200
+                    },
+                    "data": {
+                      "assetId": "123e4567-e89b-12d3-a456-000000000012",
+                      "jobId": "123e4567-e89b-12d3-a456-000000000013",
+                      "sourceNodeId": "123e4567-e89b-12d3-a456-000000000001"
+                    }
+                  },
+                  {
+                    "id": "123e4567-e89b-12d3-a456-000000000003",
+                    "type": "video",
+                    "position": {
+                      "x": 480,
+                      "y": 0
+                    },
+                    "data": {
+                      "sourceNodeId": "123e4567-e89b-12d3-a456-000000000002"
+                    }
+                  },
+                  {
+                    "id": "123e4567-e89b-12d3-a456-000000000004",
+                    "type": "note",
+                    "position": {
+                      "x": 0,
+                      "y": 240
+                    },
+                    "data": {
+                      "text": "Example note"
+                    }
+                  }
+                ],
+                "edges": [
+                  {
+                    "id": "123e4567-e89b-12d3-a456-000000000005",
+                    "source": "123e4567-e89b-12d3-a456-000000000001",
+                    "target": "123e4567-e89b-12d3-a456-000000000002"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CanvasListPageDtoEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasListPageDto"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "items": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000030",
+                  "title": "Example canvas",
+                  "revision": 1,
+                  "coverAssetId": null,
+                  "createdAt": "2026-10-05T12:00:00.000Z",
+                  "updatedAt": "2026-10-05T12:00:00.000Z"
+                }
+              ],
+              "nextCursor": null
+            }
+          }
+        ]
+      },
+      "CanvasAgentConfirmResultDtoEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasAgentConfirmResultDto"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "pending": {
+                "id": "123e4567-e89b-12d3-a456-000000000023",
+                "toolCallId": "call_example",
+                "kind": "image",
+                "prompt": "Synthetic example",
+                "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                "parameters": {},
+                "sourceNodeId": null,
+                "sourceAssetId": null,
+                "createdAt": "2026-10-05T12:00:00.000Z",
+                "expiresAt": "2026-10-05T12:15:00.000Z",
+                "status": "submitted",
+                "jobId": "123e4567-e89b-12d3-a456-000000000013"
+              },
+              "ops": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "123e4567-e89b-12d3-a456-000000000051",
+                    "type": "image",
+                    "position": {
+                      "x": 320,
+                      "y": 0
+                    },
+                    "data": {
+                      "prompt": "Synthetic example",
+                      "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                      "parameters": {},
+                      "jobId": "123e4567-e89b-12d3-a456-000000000013"
+                    }
+                  }
+                }
+              ],
+              "jobId": "123e4567-e89b-12d3-a456-000000000013"
+            }
+          }
+        ]
+      },
+      "CanvasAgentHistoryDtoEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasAgentHistoryDto"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "sessionId": "123e4567-e89b-12d3-a456-000000000032",
+              "messages": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000024",
+                  "seq": 2,
+                  "role": "assistant",
+                  "content": "Example response",
+                  "createdAt": "2026-10-05T12:00:00.000Z"
+                }
+              ],
+              "pendingJobs": [
+                {
+                  "id": "123e4567-e89b-12d3-a456-000000000023",
+                  "toolCallId": "call_example",
+                  "kind": "image",
+                  "prompt": "Synthetic example",
+                  "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                  "parameters": {},
+                  "sourceNodeId": null,
+                  "sourceAssetId": null,
+                  "createdAt": "2026-10-05T12:00:00.000Z",
+                  "expiresAt": "2026-10-05T12:15:00.000Z",
+                  "status": "pending",
+                  "jobId": null
+                }
+              ],
+              "requireConfirmation": true,
+              "autoContinuationCount": 0,
+              "nextAfterSeq": null
+            }
+          }
+        ]
+      },
+      "CanvasAgentSettingsDtoEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CanvasAgentSettingsDto"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "enabled": false,
+              "languageModelConfigId": null,
+              "maxToolCallsPerTurn": 12,
+              "maxJobsPerTurn": 4,
+              "timeoutMs": 120000,
+              "maxAutoContinuations": 3,
+              "updatedAt": "2026-10-05T12:00:00.000Z"
+            }
+          }
+        ]
+      },
+      "DeleteCanvasEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/Uuid"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "id": "123e4567-e89b-12d3-a456-000000000030"
+            }
+          }
+        ]
+      },
+      "AgentEvent_text_delta": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "text_delta"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "delta": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "delta"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "text_delta",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000040",
+            "delta": "Example response"
+          }
+        ]
+      },
+      "AgentEvent_tool_call": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tool_call"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "toolCall": {
+            "$ref": "#/components/schemas/CanvasAgentToolCallDto"
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "toolCall"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "tool_call",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000041",
+            "toolCall": {
+              "id": "call_example",
+              "name": "arrange",
+              "arguments": {
+                "positions": [
+                  {
+                    "nodeId": "123e4567-e89b-12d3-a456-000000000001",
+                    "position": {
+                      "x": 10,
+                      "y": 20
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AgentEvent_tool_result": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tool_result"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "toolCallId": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "toolCallId",
+          "result",
+          "success"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "tool_result",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000042",
+            "toolCallId": "call_example",
+            "result": {
+              "ok": true
+            },
+            "success": true
+          }
+        ]
+      },
+      "AgentEvent_canvas_ops": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "canvas_ops"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "ops": {
+            "$ref": "#/components/schemas/CanvasOps"
+          },
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "ops",
+          "baseRevision"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "canvas_ops",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000043",
+            "ops": [
+              {
+                "type": "arrange",
+                "positions": [
+                  {
+                    "nodeId": "123e4567-e89b-12d3-a456-000000000001",
+                    "position": {
+                      "x": 10,
+                      "y": 20
+                    }
+                  }
+                ]
+              }
+            ],
+            "baseRevision": 2
+          }
+        ]
+      },
+      "AgentEvent_pending_jobs": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "pending_jobs"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "pendingJobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasAgentPendingJobDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "pendingJobs"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "pending_jobs",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000044",
+            "pendingJobs": [
+              {
+                "id": "123e4567-e89b-12d3-a456-000000000023",
+                "toolCallId": "call_example",
+                "kind": "image",
+                "prompt": "Synthetic example",
+                "modelId": "123e4567-e89b-12d3-a456-000000000011",
+                "parameters": {},
+                "sourceNodeId": null,
+                "sourceAssetId": null,
+                "createdAt": "2026-10-05T12:00:00.000Z",
+                "expiresAt": "2026-10-05T12:15:00.000Z",
+                "status": "pending",
+                "jobId": null
+              }
+            ]
+          }
+        ]
+      },
+      "AgentEvent_confirm_required": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "confirm_required"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "pending": {
+            "$ref": "#/components/schemas/CanvasAgentPendingJobDto"
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "pending"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "confirm_required",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000045",
+            "pending": {
+              "id": "123e4567-e89b-12d3-a456-000000000023",
+              "toolCallId": "call_example",
+              "kind": "image",
+              "prompt": "Synthetic example",
+              "modelId": "123e4567-e89b-12d3-a456-000000000011",
+              "parameters": {},
+              "sourceNodeId": null,
+              "sourceAssetId": null,
+              "createdAt": "2026-10-05T12:00:00.000Z",
+              "expiresAt": "2026-10-05T12:15:00.000Z",
+              "status": "pending",
+              "jobId": null
+            }
+          }
+        ]
+      },
+      "AgentEvent_done": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "done"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "message": {
+            "$ref": "#/components/schemas/AgentMessageDto"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CanvasAgentUsageDto"
+          },
+          "requireConfirmation": {
+            "type": "boolean"
+          },
+          "autoContinuationCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "message",
+          "usage",
+          "requireConfirmation",
+          "autoContinuationCount"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "done",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000046",
+            "message": {
+              "id": "123e4567-e89b-12d3-a456-000000000024",
+              "seq": 2,
+              "role": "assistant",
+              "content": "Example response",
+              "createdAt": "2026-10-05T12:00:00.000Z"
+            },
+            "usage": {
+              "inputTokens": 10,
+              "outputTokens": 5
+            },
+            "requireConfirmation": true,
+            "autoContinuationCount": 0
+          }
+        ]
+      },
+      "AgentEvent_error": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "error"
+          },
+          "turnId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "code": {
+            "$ref": "#/components/schemas/CanvasErrorCode"
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "turnId",
+          "eventId",
+          "code",
+          "message",
+          "retryable"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "type": "error",
+            "turnId": "123e4567-e89b-12d3-a456-000000000031",
+            "eventId": "123e4567-e89b-12d3-a456-000000000047",
+            "code": "CANVAS_AGENT_TIMEOUT",
+            "message": "CANVAS_AGENT_TIMEOUT",
+            "retryable": false
+          }
+        ]
+      },
+      "AgentStreamEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AgentEvent_text_delta"
+          },
+          {
+            "$ref": "#/components/schemas/AgentEvent_tool_call"
+          },
+          {
+            "$ref": "#/components/schemas/AgentEvent_tool_result"
+          },
+          {
+            "$ref": "#/components/schemas/AgentEvent_canvas_ops"
+          },
+          {
+            "$ref": "#/components/schemas/AgentEvent_pending_jobs"
+          },
+          {
+            "$ref": "#/components/schemas/AgentEvent_confirm_required"
+          },
+          {
+            "$ref": "#/components/schemas/AgentEvent_done"
+          },
+          {
+            "$ref": "#/components/schemas/AgentEvent_error"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "text_delta": "#/components/schemas/AgentEvent_text_delta",
+            "tool_call": "#/components/schemas/AgentEvent_tool_call",
+            "tool_result": "#/components/schemas/AgentEvent_tool_result",
+            "canvas_ops": "#/components/schemas/AgentEvent_canvas_ops",
+            "pending_jobs": "#/components/schemas/AgentEvent_pending_jobs",
+            "confirm_required": "#/components/schemas/AgentEvent_confirm_required",
+            "done": "#/components/schemas/AgentEvent_done",
+            "error": "#/components/schemas/AgentEvent_error"
+          }
+        },
+        "description": "event: equals type; data: entire JSON event including UUID turnId/eventId. IDs assigned per emission, not durable replay cursors. Upstream nonstreaming; text_delta complete segment, not token realtime. Expected error terminates; retryable only CANVAS_AGENT_FAILED."
+      }
+    },
+    "securitySchemes": {
+      "museSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "muse_session",
+        "description": "HttpOnly session cookie, not Authorization Bearer. Invalid/expired/revoked/inactive session:401. Authenticated nonadmin settings:403."
+      }
+    }
+  },
+  "x-example-flow": [
+    "Create example -> 201 revision 1; PATCH baseRevision 1 -> revision 2. Reusing revision 1 ->409; GET/refetch and reconcile.",
+    "POST user baseRevision 2 -> SSE call/result/ops and/or pending/confirmation, then done. Agent never saves scene: apply ops locally then PATCH.",
+    "Confirm pendingId approve=true -> stable submitted jobId; repeat returns same submitted result. After terminal owned job POST strict job_event with refreshed revision; server builds summary. Recover with GET history(afterSeq) and GET canvas, not Last-Event-ID."
+  ]
+}

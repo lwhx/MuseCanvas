@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
-import { CircleAlert, FileText, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { WarningCircleIcon as CircleAlert, FileTextIcon as FileText, ArrowClockwiseIcon as RefreshCw, TrashIcon as Trash2, UploadSimpleIcon as Upload } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { Button, IconButton } from './button'
 import { Progress } from './progress'
@@ -179,7 +179,7 @@ export function FileDropZone({
           htmlFor={inputId}
           className="flex cursor-pointer flex-col items-center gap-2 rounded-control peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary peer-disabled:cursor-not-allowed"
         >
-          <Upload aria-hidden="true" className={`${iconSize.xl} text-muted-foreground`} />
+          <Upload weight="duotone" aria-hidden="true" className={`${iconSize.xl} text-muted-foreground`} />
           <span className="text-sm font-medium text-foreground">{label}</span>
         </label>
         {shownHint ? (
@@ -189,7 +189,7 @@ export function FileDropZone({
         ) : null}
         {rejection ? (
           <p role="alert" className="flex items-start gap-1 text-xs text-danger">
-            <CircleAlert aria-hidden="true" className={`mt-0.5 ${iconSize.xs} shrink-0`} />
+            <CircleAlert weight="fill" aria-hidden="true" className={`mt-0.5 ${iconSize.xs} shrink-0`} />
             <span>{rejection}</span>
           </p>
         ) : null}
@@ -197,7 +197,7 @@ export function FileDropZone({
 
       {error ? (
         <p role="alert" className="flex items-start gap-1 text-xs text-danger">
-          <CircleAlert aria-hidden="true" className={`mt-0.5 ${iconSize.xs} shrink-0`} />
+          <CircleAlert weight="fill" aria-hidden="true" className={`mt-0.5 ${iconSize.xs} shrink-0`} />
           <span>{error}</span>
         </p>
       ) : null}
@@ -215,7 +215,7 @@ export function FileDropZone({
                   failed ? 'border-danger' : 'border-border',
                 )}
               >
-                <FileText aria-hidden="true" className={`${iconSize.md} shrink-0 text-muted-foreground`} />
+                <FileText weight="bold" aria-hidden="true" className={`${iconSize.md} shrink-0 text-muted-foreground`} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-sm text-foreground">{file.name}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">{formatFileSize(file.size)}</span>
@@ -228,7 +228,7 @@ export function FileDropZone({
 
                 <div className="flex shrink-0 items-center gap-1">
                   {failed && onRetry ? (
-                    <Button variant="secondary" size="sm" onClick={() => onRetry(file.id)} icon={<RefreshCw />}>
+                    <Button variant="secondary" size="sm" onClick={() => onRetry(file.id)} icon={<RefreshCw weight="bold" />}>
                       重试
                     </Button>
                   ) : null}
@@ -238,7 +238,7 @@ export function FileDropZone({
                       size="sm"
                       aria-label={`删除 ${file.name}`}
                       onClick={() => onRemove(file.id)}
-                      icon={<Trash2 />}
+                      icon={<Trash2 weight="bold" />}
                     />
                   ) : null}
                 </div>

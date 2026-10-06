@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { UserRound } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { UserCircleIcon as UserRound } from '@phosphor-icons/react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { controlSquare, iconSize } from './size'
 
@@ -54,7 +54,7 @@ interface AvatarSharedProps {
   /** First-letter fallback source — a name or e-mail; only its first glyph shows. */
   initial?: string
   /** Last resort when there is neither an image nor an initial. */
-  fallbackIcon?: LucideIcon
+  fallbackIcon?: PhosphorIcon
   /** Presence dot, always with its own label; the colour is never the only clue. */
   status?: AvatarStatus
   /**
@@ -131,7 +131,7 @@ export function Avatar({
           {letter}
         </span>
       ) : (
-        <Icon aria-hidden="true" className={`${iconSize.sm} text-muted-foreground`} />
+        <Icon weight="duotone" aria-hidden="true" className={`${iconSize.sm} text-muted-foreground`} />
       )}
 
       {status ? (

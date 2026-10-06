@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import type {
@@ -11,7 +11,8 @@ import type {
 } from '@/shared/types'
 import { PLUGIN_PACKAGE_MAX_BYTES, humanFileSize, postPluginPackage, shortDigest } from '../lib/plugin-upload'
 import { PluginFindingList } from './plugin-finding-list'
-import { ShieldAlert } from 'lucide-react'
+import { createPluginSubmissionGuard, invalidateAdminPluginCatalogs } from '../lib/admin-plugin-state'
+import { ShieldWarningIcon as ShieldAlert } from '@phosphor-icons/react'
 import {
   Alert,
   Button,
@@ -54,6 +55,7 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
   const queryClient = useQueryClient()
   const [file, setFile] = useState<File | null>(null)
   const [validate, setValidate] = useState<ValidateState>(IDLE)
+  const submission = useRef(createPluginSubmissionGuard()).current
 
   const resetFields = () => {
     setFile(null)
@@ -61,7 +63,8 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
   }
 
   const close = () => {
-    resetFields()
+    // Closing is not a cancellation. Preserve this submission for reopening.
+    if (!submission.isPending()) resetFields()
     onClose()
   }
 
@@ -69,7 +72,7 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
   // (scan-only, writes nothing) so the admin sees findings before installing. Stale responses
   // are dropped via the AbortController owned by this effect run.
   useEffect(() => {
-    if (!open) return
+    if (!open || submission.isPending()) return
     if (!file) {
       setValidate(IDLE)
       return
@@ -114,15 +117,17 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
       clearTimeout(timer)
       controller.abort()
     }
-  }, [open, file])
+  }, [open, file, submission])
 
   const installMutation = useMutation({
-    mutationFn: async (pkg: File) =>
+    mutationFn: async ({ pkg }: { pkg: File; requestId: number }) =>
       postPluginPackage<AdminPluginUploadResponse>(API_ENDPOINTS.admin.pluginUpload, pkg),
-    onSuccess: (res) => {
+    onSuccess: async (res, { requestId }) => {
+      if (!submission.owns(requestId)) return
       if (!res.success) {
         // fail() envelope: PLUGIN_UPLOAD_DISABLED / PLUGIN_VERSION_IMMUTABLE /
         // PLUGIN_ID_RESERVED / INVALID_INPUT / PLUGIN_ARTIFACT_TOO_LARGE / NETWORK_ERROR…
+        submission.finish(requestId)
         setValidate({ ...IDLE, phase: 'error', message: `${res.error?.code ?? 'ERROR'}：${res.error?.message ?? '上传请求失败'}` })
         return
       }
@@ -130,18 +135,22 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
       if (data && data.installed === true) {
         // The row was created with status='pending'; it goes live only after the
         // worker pulls, verifies and re-scans the artifact on its maintenance tick.
-        queryClient.invalidateQueries({ queryKey: ['admin', 'plugins'] })
+        await invalidateAdminPluginCatalogs(queryClient)
+        if (!submission.finish(requestId)) return
         onInstalled?.({ pluginId: data.plugin.pluginId, pluginVersion: data.plugin.pluginVersion })
-        close()
+        resetFields()
+        onClose()
         return
       }
+      submission.finish(requestId)
       if (data) {
         setValidate({ phase: 'rejected', findings: data.findings, summary: null, message: `服务端拒绝：${data.code}` })
       } else {
         setValidate({ ...IDLE, phase: 'error', message: '上传响应缺少数据' })
       }
     },
-    onError: (err: Error) => {
+    onError: (err: Error, { requestId }) => {
+      if (!submission.finish(requestId)) return
       setValidate({ ...IDLE, phase: 'error', message: err.message || '上传请求失败' })
     },
   })
@@ -165,16 +174,20 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
       open={open}
       onClose={close}
       title={`上传${kind === 'media' ? '媒体' : '语言'}插件`}
-      panelClassName="max-w-dialog-wide"
+      panelClassName="max-w-dialog-wide max-h-[90dvh] max-md:[&_button]:min-h-[var(--control-lg)] max-md:[&_button]:min-w-[var(--control-lg)]"
       footer={
         <>
           <Button variant="ghost" onClick={close}>
-            取消
+            {installMutation.isPending ? '关闭（安装继续）' : '取消'}
           </Button>
           <Button
             loading={installMutation.isPending}
             disabled={!canSubmit}
-            onClick={() => file && installMutation.mutate(file)}
+            onClick={() => {
+              if (!file || !canSubmit) return
+              const requestId = submission.begin()
+              if (requestId !== null) installMutation.mutate({ pkg: file, requestId })
+            }}
           >
             安装插件
           </Button>
@@ -182,10 +195,15 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
       }
     >
       <div className="flex flex-col gap-6">
+        {installMutation.isPending && (
+          <Alert tone="info" role="status" title="正在安装插件">
+            正在提交 {file?.name}。关闭此窗口不会取消或回滚安装；重新打开可查看同一笔提交，完成前不能更换、移除或重复提交插件包。
+          </Alert>
+        )}
         {/* Risk disclosure — deliberately first-class content, not fine print. */}
         <Alert
           tone="danger"
-          icon={<ShieldAlert aria-hidden="true" />}
+          icon={<ShieldAlert weight="fill" aria-hidden="true" />}
           title="上传前必读"
         >
           <div className="flex flex-col gap-2">
@@ -202,8 +220,17 @@ export function AdminPluginUploadDialog({ open, onClose, kind, onInstalled }: Ad
 
         <FileDropZone
           files={packageFiles}
-          onFilesSelected={(files) => setFile(files[0] ?? null)}
-          onRemove={() => setFile(null)}
+          disabled={installMutation.isPending}
+          onFilesSelected={(files) => {
+            if (submission.isPending()) return
+            setValidate(IDLE)
+            setFile(files[0] ?? null)
+          }}
+          onRemove={installMutation.isPending ? undefined : () => {
+            if (submission.isPending()) return
+            setValidate(IDLE)
+            setFile(null)
+          }}
           accept=".zip,application/zip"
           maxFileSize={PLUGIN_PACKAGE_MAX_BYTES}
           maxFiles={1}

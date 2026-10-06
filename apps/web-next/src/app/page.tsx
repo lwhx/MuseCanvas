@@ -1,16 +1,16 @@
 import Link from 'next/link'
 import {
-  ArrowRight,
-  Download,
-  Layers3,
-  Library,
-  Mail,
-  PenLine,
-  Repeat,
-  ShieldCheck,
-  SlidersHorizontal,
-  WandSparkles,
-} from 'lucide-react'
+  ArrowRightIcon as ArrowRight,
+  DownloadSimpleIcon as Download,
+  StackIcon as Layers3,
+  ImagesSquareIcon as Library,
+  EnvelopeSimpleIcon as Mail,
+  PencilLineIcon as PenLine,
+  ArrowsClockwiseIcon as Repeat,
+  ShieldCheckIcon as ShieldCheck,
+  SlidersHorizontalIcon as SlidersHorizontal,
+  MagicWandIcon as WandSparkles,
+} from '@phosphor-icons/react/ssr'
 import { Reveal } from '@/shared/components/reveal'
 import { Card, CardBody, CardHeader, CardTitle } from '@/shared/components/ui/card'
 import { PublicHeader } from '@/shared/components/public-header'
@@ -123,7 +123,7 @@ export default function HomePage() {
                 <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                   <Link href="/login" className={heroPrimary}>
                     开始创作
-                    <ArrowRight aria-hidden="true" />
+                    <ArrowRight weight="bold" aria-hidden="true" />
                   </Link>
                   <Link href="#workflow" className={heroGhost}>
                     看看创作流程
@@ -186,7 +186,7 @@ export default function HomePage() {
                   return (
                     <li key={capability.title}>
                       <Card className="h-full">
-                        <Icon className={`${iconSize.lg} text-muted-foreground`} aria-hidden="true" />
+                        <Icon weight="duotone" className={`${iconSize.lg} text-muted-foreground`} aria-hidden="true" />
                         <CardHeader>
                           <CardTitle level={3}>{capability.title}</CardTitle>
                         </CardHeader>
@@ -225,7 +225,7 @@ export default function HomePage() {
                   return (
                     <li key={step.title} className="flex min-w-0 flex-col gap-1">
                       <h3 className="flex items-center gap-2 text-subtitle text-foreground [line-break:strict]">
-                        <StepIcon className={`${iconSize.md} shrink-0 text-muted-foreground`} aria-hidden="true" />
+                        <StepIcon weight="duotone" className={`${iconSize.md} shrink-0 text-muted-foreground`} aria-hidden="true" />
                         {step.title}
                       </h3>
                       <p className="text-sm text-muted-foreground [text-wrap:pretty]">{step.description}</p>
@@ -250,7 +250,7 @@ export default function HomePage() {
               <div className="flex flex-col items-center gap-3 sm:flex-row">
                 <Link href="/login" className={heroPrimary}>
                   进入 MuseCanvas
-                  <ArrowRight aria-hidden="true" />
+                  <ArrowRight weight="bold" aria-hidden="true" />
                 </Link>
                 <Link href="/terms" className={heroGhost}>
                   先看用户协议

@@ -1,7 +1,5 @@
 'use client'
 
-import {
-  useState } from 'react'
 import { useQuery,
   useMutation,
   useQueryClient } from '@tanstack/react-query'
@@ -9,8 +7,10 @@ import { API_ENDPOINTS,
   type OAuthProviderName } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { AdminOAuthProvider } from '@/shared/types'
+import { useAdminActions } from '../lib/use-admin-actions'
+import { AdminActionErrors } from './admin-confirm-dialog'
+import { AdminCopyValue } from './admin-copy-value'
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -21,14 +21,9 @@ import {
   Switch,
   iconSize,
 } from '@/shared/components/ui'
-import { RefreshCw } from 'lucide-react'
+import { ArrowClockwiseIcon as RefreshCw } from '@phosphor-icons/react'
 
 const oauthQueryKey = ['admin', 'oauth-providers'] as const
-
-interface StatusMessage {
-  tone: 'success' | 'danger'
-  msg: string
-}
 
 const sourceLabel: Record<AdminOAuthProvider['source'], string> = {
   database: '数据库配置',
@@ -43,7 +38,7 @@ function providerName(provider: AdminOAuthProvider): string {
 
 export function AdminOAuthView() {
   const queryClient = useQueryClient()
-  const [status, setStatus] = useState<StatusMessage | null>(null)
+  const actions = useAdminActions()
 
   const {
     data: providers = [],
@@ -70,45 +65,38 @@ export function AdminOAuthView() {
       if (!res.success) throw new Error(res.error?.message || '更新状态失败')
       return res.data
     },
-    onSuccess: () => {
-      setStatus({ tone: 'success', msg: 'OAuth 提供商状态已更新' })
-      queryClient.invalidateQueries({ queryKey: oauthQueryKey })
-    },
-    onError: (err: Error) => {
-      setStatus({ tone: 'danger', msg: `${err.message || '更新状态失败'}。开关已恢复原状态，设置未更改，请重试。` })
-      queryClient.invalidateQueries({ queryKey: oauthQueryKey })
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: oauthQueryKey })
     },
   })
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex min-w-0 flex-col gap-8">
       <PageHeader
+        className="min-w-0 [overflow-wrap:anywhere]"
+        actionsClassName="max-w-full min-w-0 max-md:[&_button]:min-h-[var(--control-lg)] max-md:[&_a]:min-h-[var(--control-lg)]"
         title="OAuth 登录提供商"
-        description="配置第三方账号认证源（GitHub、Google），支持一键登录与账号绑定。"
+        description="查看第三方登录配置并管理启停。提供商凭据由初始化流程或服务端环境配置，后台不提供编辑表单。"
         actions={
           <Button
             variant="secondary"
             onClick={() => void refetch()}
             loading={isFetching}
-            icon={<RefreshCw aria-hidden="true" className={iconSize.sm} />}
+            icon={<RefreshCw weight="bold" aria-hidden="true" className={iconSize.sm} />}
           >
             刷新
           </Button>
         }
       />
 
-      {status ? (
-        <Alert tone={status.tone} role={status.tone === 'danger' ? 'alert' : 'status'} onDismiss={() => setStatus(null)}>
-          {status.msg}
-        </Alert>
-      ) : null}
+      <AdminActionErrors errors={actions.errors} />
 
       {isLoading ? (
         <div className="flex flex-col gap-4" role="status" aria-busy="true">
           <span className="sr-only">正在加载 OAuth 提供商</span>
           {['github', 'google'].map((provider) => (
-            <Card key={provider} aria-hidden="true" className="flex-row flex-wrap items-center justify-between gap-x-6 gap-y-3">
-              <div className="flex min-w-0 flex-col gap-2">
+            <Card key={provider} aria-hidden="true" className="min-w-0 flex-row flex-wrap items-center justify-between gap-x-6 gap-y-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <SkeletonText width={provider === 'github' ? '6rem' : '7rem'} />
                   <SkeletonTile className="aspect-auto h-6 w-16 rounded-pill" />
@@ -146,8 +134,8 @@ export function AdminOAuthView() {
             {providers.map((p) => {
               const name = providerName(p)
               return (
-                <Card key={p.provider} className="flex-row flex-wrap items-center justify-between gap-x-6 gap-y-3">
-                  <div className="flex min-w-0 flex-col gap-2">
+                <Card key={p.provider} className="min-w-0 flex-row flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-module text-foreground">{name}</h2>
                       <Badge tone={p.enabled ? 'success' : 'neutral'}>{p.enabled ? '已启用' : '已停用'}</Badge>
@@ -159,9 +147,10 @@ export function AdminOAuthView() {
                         {p.clientId ? `${p.clientId.slice(0, 8)}…` : '未配置'}
                       </span>
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      回调地址：<span className="font-mono text-foreground">{p.redirectUri || '未配置'}</span>
-                    </p>
+                    <div className="min-w-0 text-sm text-muted-foreground">
+                      <p className="mb-1">回调地址</p>
+                      <AdminCopyValue value={p.redirectUri || undefined} label={`${name} 回调地址`} unavailable="未配置回调地址" />
+                    </div>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-3">
@@ -169,9 +158,9 @@ export function AdminOAuthView() {
                     <Switch
                       checked={p.enabled}
                       aria-label={`${name} 登录`}
-                      disabled={toggleMutation.isPending}
+                      disabled={actions.isToggleBlocked(p.provider)}
                       onCheckedChange={(enabled) =>
-                        toggleMutation.mutateAsync({ provider: p.provider, enabled })
+                        actions.run(p.provider, name, () => toggleMutation.mutateAsync({ provider: p.provider, enabled }), enabled ? 'OAuth 登录已启用' : 'OAuth 登录已停用', 'toggle')
                       }
                     />
                   </div>

@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useId } from 'react'
-import { X } from 'lucide-react'
+import { XIcon as X } from '@phosphor-icons/react'
 import { useDialog } from '@/shared/hooks/useDialog'
 import type { DialogInitialFocus } from '@/shared/hooks/useDialog'
 import { cn } from '@/shared/lib/cn'
@@ -136,7 +136,7 @@ export function Dialog({
               'text-muted-foreground hover:bg-tonal-hover hover:text-foreground active:bg-tonal-active motion-press',
             )}
           >
-            <X className={iconSize.sm} aria-hidden="true" />
+            <X weight="bold" className={iconSize.sm} aria-hidden="true" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { CircleNotchIcon as Loader2 } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { controlSquare } from './size'
 
@@ -88,7 +88,7 @@ export function Switch({ checked, onCheckedChange, disabled = false, ...aria }: 
         )}
       >
         {pending ? (
-          <Loader2
+          <Loader2 weight="bold"
             className={cn('h-3 w-3 motion-spin', checked ? 'text-primary' : 'text-muted-foreground')}
           />
         ) : null}

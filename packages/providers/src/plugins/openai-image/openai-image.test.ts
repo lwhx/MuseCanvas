@@ -271,6 +271,65 @@ test('transient HTTP and transport errors throw normalized errors', async () => 
   })
 })
 
+test('successful headers followed by a stalled body preserve PROVIDER_TIMEOUT', { timeout: 2000 }, async () => {
+  const cfg = { ...config(), timeoutMs: 20 }
+  let headersReturned = false
+  let bodyCanceled = false
+  const ctx = contextFor(OPENAI_IMAGE_PLUGIN_VERSION, cfg, async () => {
+    headersReturned = true
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode('{"data":[')) },
+      cancel() { bodyCanceled = true },
+    }), { status: 200, headers: { 'content-type': 'application/json' } })
+  })
+  await assert.rejects(
+    () => openAiImagePlugin.submit(
+      { modality: 'image', vendorModelId: 'gpt-image-2', prompt: 'ok', size: '1024x1024', count: 1 },
+      cfg, ctx,
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof NormalizedProviderError)
+      assert.equal(error.diagnostic.code, 'PROVIDER_TIMEOUT')
+      assert.equal(error.diagnostic.pluginId, OPENAI_IMAGE_PLUGIN_ID)
+      return true
+    },
+  )
+  assert.equal(headersReturned, true)
+  assert.equal(bodyCanceled, true)
+})
+
+test('successful response body preserves normalized transport and safety diagnostics', async () => {
+  const cfg = config()
+  for (const code of ['PROVIDER_TEMPORARY_ERROR', 'OUTPUT_READ_FAILED'] as const) {
+    const expected = NormalizedProviderError.create(OPENAI_IMAGE_PLUGIN_ID, OPENAI_IMAGE_PLUGIN_VERSION, code, 'Fixture body read failure')
+    const ctx = contextFor(OPENAI_IMAGE_PLUGIN_VERSION, cfg, async () =>
+      new Response(new ReadableStream<Uint8Array>({
+        start(controller) { controller.error(expected) },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    )
+    await assert.rejects(
+      () => openAiImagePlugin.submit(
+        { modality: 'image', vendorModelId: 'gpt-image-2', prompt: 'ok', size: '1024x1024', count: 1 },
+        cfg, ctx,
+      ),
+      (error: unknown) => { assert.equal(error, expected); return true },
+    )
+  }
+})
+
+test('malformed successful JSON remains terminal PROVIDER_EMPTY_RESULT', async () => {
+  const cfg = config()
+  const ctx = contextFor(OPENAI_IMAGE_PLUGIN_VERSION, cfg, async () =>
+    new Response('{"data":', { status: 200, headers: { 'content-type': 'application/json' } }),
+  )
+  const result = await openAiImagePlugin.submit(
+    { modality: 'image', vendorModelId: 'gpt-image-2', prompt: 'ok', size: '1024x1024', count: 1 },
+    cfg, ctx,
+  )
+  assert.equal(result.status, 'failed')
+  assert.equal(result.error?.code, 'PROVIDER_EMPTY_RESULT')
+})
+
 test('deterministic 4xx returns terminal failed with PROVIDER_REJECTED', async () => {
   const cfg = config()
   const ctx = contextFor(

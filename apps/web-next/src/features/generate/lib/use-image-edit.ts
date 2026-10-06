@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '@/shared/services/client-api'
 import { LIBRARY_QUERY_KEY } from '@/shared/hooks/useLibrary'
 import { JOBS_QUERY_KEY } from '@/shared/hooks/useJobs'
+import { cacheCreatedJob } from '@/shared/lib/created-job-cache'
 import { useGenerateUiStore } from '@/shared/stores/generate-ui-store'
 import type { GenerationJob } from '@/shared/types'
 import { postImageEdit } from './edit-image-api'
@@ -24,9 +25,11 @@ export function useCreateImageEdit() {
       }
       return res.data
     },
-    onSuccess: (job) => {
-      queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
-      queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY_KEY })
+    retry: false,
+    onSuccess: async (job) => {
+      await cacheCreatedJob(queryClient, job)
+      void queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
+      void queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY_KEY })
       // Switch to the new job and leave edit mode in the same tick, so the stage
       // shows the queued edit instead of a picture that is no longer the subject
       // of anything. Deliberately success-only: a failed edit keeps the image, the

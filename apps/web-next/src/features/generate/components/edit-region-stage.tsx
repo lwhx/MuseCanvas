@@ -31,8 +31,8 @@ import type { DisplayRect,
   EditSelection,
   Point,
   RenderBox } from '@musecanvas/contracts'
-import { Eraser,
-  ImageOff } from 'lucide-react'
+import { EraserIcon as Eraser,
+  ImageBrokenIcon as ImageOff } from '@phosphor-icons/react'
 import { Button,
   iconSize,
 } from '@/shared/components/ui'
@@ -361,7 +361,7 @@ export function EditRegionStage({
           // lives in the status line below, which is also the live region — the
           // same split `media-frame.tsx` uses for a dead preview.
           <span className="absolute inset-0 flex items-center justify-center">
-            <ImageOff aria-hidden="true" className={`${iconSize.md} text-decorative-muted`} />
+            <ImageOff weight="duotone" aria-hidden="true" className={`${iconSize.md} text-decorative-muted`} />
           </span>
         ) : null}
       </div>
@@ -383,7 +383,7 @@ export function EditRegionStage({
           size="sm"
           onClick={() => onSelectionChange(null)}
           disabled={!selection}
-          icon={<Eraser aria-hidden="true" />}
+          icon={<Eraser weight="bold" aria-hidden="true" />}
         >
           清除选区
         </Button>

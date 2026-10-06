@@ -34,13 +34,13 @@ import { GithubIcon, GoogleIcon } from '@/shared/components/brand-icons'
 import { formatDate } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/cn'
 import {
-  Calendar,
-  Link2,
-  Mail,
-  ShieldCheck,
-  Unlink,
-  X,
-} from 'lucide-react'
+  CalendarIcon as Calendar,
+  LinkSimpleIcon as Link2,
+  EnvelopeSimpleIcon as Mail,
+  ShieldCheckIcon as ShieldCheck,
+  LinkSimpleBreakIcon as Unlink,
+  XIcon as X,
+} from '@phosphor-icons/react'
 
 /** The two providers this page can offer, in display order. */
 const PROVIDERS: { name: OAuthProviderName; label: string }[] = [
@@ -298,7 +298,7 @@ export function AccountView() {
                     ) : (
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                         <div className="flex items-start gap-3">
-                          <Mail aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
+                          <Mail weight="bold" aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
                           <div className="flex min-w-0 flex-col gap-1">
                             <p className="text-xs text-muted-foreground">登录邮箱</p>
                             <p className="truncate text-sm text-foreground">{userProfile?.email || '—'}</p>
@@ -306,7 +306,7 @@ export function AccountView() {
                         </div>
 
                         <div className="flex items-start gap-3">
-                          <ShieldCheck aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
+                          <ShieldCheck weight="bold" aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
                           <div className="flex min-w-0 flex-col gap-1">
                             <p className="text-xs text-muted-foreground">账户权限</p>
                             <p className="text-sm text-foreground">
@@ -320,7 +320,7 @@ export function AccountView() {
                         </div>
 
                         <div className="flex items-start gap-3">
-                          <Calendar aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
+                          <Calendar weight="bold" aria-hidden="true" className={`mt-1 ${iconSize.sm} shrink-0 text-muted-foreground`} />
                           <div className="flex min-w-0 flex-col gap-1">
                             <p className="text-xs text-muted-foreground">注册时间</p>
                             <p className="font-mono text-sm tabular-nums text-foreground">
@@ -421,7 +421,7 @@ export function AccountView() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    icon={<X aria-hidden="true" />}
+                                    icon={<X weight="bold" aria-hidden="true" />}
                                     onClick={() => toggleStaged(provider.name)}
                                   >
                                     取消解除
@@ -430,7 +430,7 @@ export function AccountView() {
                                   <Button
                                     variant="danger-ghost"
                                     size="sm"
-                                    icon={<Unlink aria-hidden="true" />}
+                                    icon={<Unlink weight="bold" aria-hidden="true" />}
                                     onClick={() => toggleStaged(provider.name)}
                                   >
                                     解除绑定
@@ -443,7 +443,7 @@ export function AccountView() {
                                   href={API_ENDPOINTS.account.oauthLinkStart(provider.name)}
                                   className={buttonVariants({ variant: 'secondary', size: 'sm' })}
                                 >
-                                  <Link2 aria-hidden="true" />
+                                  <Link2 weight="bold" aria-hidden="true" />
                                   绑定账号
                                 </a>
                               )}

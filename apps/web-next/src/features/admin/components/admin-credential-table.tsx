@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
 import type { ProviderCredential, ProviderTestStatus } from '@/shared/types'
 import { credentialPluginKey } from '../lib/provider-templates'
-import { Trash2 } from 'lucide-react'
+import { useAdminActions } from '../lib/use-admin-actions'
+import { AdminActionErrors } from './admin-confirm-dialog'
+import { AdminMobileRecords, AdminRecordDetailDialog, AdminRecordFields } from './admin-record-detail-dialog'
+import { TrashIcon as Trash2 } from '@phosphor-icons/react'
 import {
-  Alert,
   Badge,
   Button,
   DataTable,
@@ -66,9 +68,10 @@ export function AdminCredentialTable({
   onRetry,
 }: AdminCredentialTableProps) {
   const queryClient = useQueryClient()
-  const [testingId, setTestingId] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{ id: string; success: boolean; msg: string } | null>(null)
-  const [actionError, setActionError] = useState('')
+  const recordListRef = useRef<HTMLDivElement | null>(null)
+  const [detailCredential, setDetailCredential] = useState<ProviderCredential | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ProviderCredential | null>(null)
+  const actions = useAdminActions()
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -76,12 +79,8 @@ export function AdminCredentialTable({
       if (!res.success) throw new Error(res.error?.message || '删除凭据失败')
       return res.data
     },
-    onSuccess: () => {
-      setActionError('')
-      queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
-    },
-    onError: (err: Error) => {
-      setActionError(err.message || '删除凭据失败')
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
     },
   })
 
@@ -91,49 +90,53 @@ export function AdminCredentialTable({
       if (!res.success) throw new Error(res.error?.message || '更新凭据状态失败')
       return res.data
     },
-    onSuccess: () => {
-      setActionError('')
-      queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
-    },
-    onError: (err: Error) => {
-      setActionError(err.message || '更新凭据状态失败')
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
     },
   })
 
-  async function handleTest(id: string) {
-    setTestingId(id)
-    setTestResult(null)
-    try {
-      const res = await api<{ tested: boolean; status: string }>(API_ENDPOINTS.admin.providerCredentialTest(id), {
-        method: 'POST',
-      })
-      if (res.success && res.data?.tested && res.data.status === 'success') {
-        setTestResult({ id, success: true, msg: '连通性测试通过' })
-      } else if (res.success && res.data?.status === 'pending') {
-        // The worker is still probing; the row turns final on its own (the
-        // credential list polls while any test is pending).
-        setTestResult({ id, success: true, msg: '测试仍在进行，结果将显示在「最近测试」中' })
-      } else {
-        setTestResult({ id, success: false, msg: res.error?.message || '连通性测试未通过' })
+  async function handleTest(credential: ProviderCredential) {
+    await actions.run(credential.id, credential.displayName, async () => {
+      try {
+        const res = await api<{ tested: boolean; status: string }>(API_ENDPOINTS.admin.providerCredentialTest(credential.id), {
+          method: 'POST',
+        })
+        if (!res.success || (res.data?.status !== 'pending' && !(res.data?.tested && res.data.status === 'success'))) {
+          throw new Error(res.error?.message || '连通性测试未通过')
+        }
+        return res.data
+      } finally {
+        // Even a failed test may stamp the last-test status on the server.
+        await queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
       }
-    } catch {
-      setTestResult({ id, success: false, msg: '测试请求失败' })
-    } finally {
-      setTestingId(null)
-      // The test stamps `lastTestStatus` on the row either way.
-      queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
-    }
+    }, '连通测试请求已完成；最终结果请查看最近测试', 'test')
+  }
+
+  const currentDetailCredential = credentials.find((credential) => credential.id === detailCredential?.id) ?? detailCredential
+  function requestDeleteCredential(credential: ProviderCredential) {
+    setDeleteTarget(credential)
+  }
+  function credentialBusy(credential: ProviderCredential) {
+    return actions.isPending(credential.id) || credential.lastTestStatus === 'pending'
+  }
+  function toggleCredential(credential: ProviderCredential, enabled: boolean) {
+    return actions.run(credential.id, credential.displayName, () => toggleMutation.mutateAsync({ id: credential.id, enabled }), enabled ? '凭据已启用' : '凭据已停用', 'toggle')
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {actionError && (
-        <Alert tone="danger" role="alert" title="凭据操作未完成">
-          {actionError}。请修正后重试；若多次失败，请确认服务端凭据配置后刷新列表。
-        </Alert>
-      )}
+    <div ref={recordListRef} tabIndex={-1} role="region" aria-label="供应商凭据列表" className="flex flex-col gap-3">
+      <AdminActionErrors errors={actions.errors} />
 
-      <DataTable caption={variant === 'media' ? '媒体供应商凭据列表' : '语言模型供应商凭据列表'} columns={6}>
+      <AdminMobileRecords records={credentials} loading={isLoading}
+        error={error ? typeof error === 'string' ? error : '加载凭据失败' : null}
+        onRetry={onRetry} empty={emptyText}
+        title={(credential) => credential.displayName}
+        status={(credential) => <Badge tone={credential.enabled ? 'success' : 'neutral'}>{credential.enabled ? '已启用' : '已停用'}</Badge>}
+        summary={(credential) => <>{credential.providerId || credential.adapter || '—'} · 最近测试：{TEST_STATUS_LABEL[credential.lastTestStatus] || credential.lastTestStatus}</>}
+        onDetails={setDetailCredential}
+      />
+
+      <DataTable cardClassName="hidden md:block" caption={variant === 'media' ? '媒体供应商凭据列表' : '语言模型供应商凭据列表'} columns={6}>
         <TableHead>
           <TableHeadCell>凭据名称</TableHeadCell>
           <TableHeadCell>{variant === 'media' ? '来源插件' : '供应商'}</TableHeadCell>
@@ -216,7 +219,8 @@ export function AdminCredentialTable({
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={c.enabled}
-                        onCheckedChange={(enabled) => toggleMutation.mutateAsync({ id: c.id, enabled })}
+                        disabled={actions.isToggleBlocked(c.id, c.lastTestStatus === 'pending')}
+                        onCheckedChange={(enabled) => toggleCredential(c, enabled)}
                         aria-label={`凭据 ${c.displayName} 启用状态`}
                       />
                       <span className="text-xs text-muted-foreground">
@@ -226,21 +230,14 @@ export function AdminCredentialTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                          {testResult && testResult.id === c.id && (
-                            <span
-                              className={`text-xs ${testResult.success ? 'text-success' : 'text-danger'}`}
-                              role="status"
-                            >
-                              {testResult.msg}
-                            </span>
-                          )}
                           {/* `loading` keeps the label and the measured idle width, so the
                               row never reflows mid-test. */}
                           <Button
                             variant="secondary"
                             size="sm"
-                            loading={testingId === c.id}
-                            onClick={() => handleTest(c.id)}
+                            loading={c.lastTestStatus === 'pending'}
+                            disabled={credentialBusy(c)}
+                            onClick={() => { void handleTest(c).catch(() => {}) }}
                             aria-label={`连通测试凭据 ${c.displayName}`}
                           >
                             连通测试
@@ -248,13 +245,10 @@ export function AdminCredentialTable({
                           <IconButton
                             variant="danger-ghost"
                             size="sm"
-                            onClick={() => {
-                              if (confirm(`确认删除凭据 ${c.displayName}？`)) {
-                                deleteMutation.mutate(c.id)
-                              }
-                            }}
+                            disabled={credentialBusy(c)}
+                            onClick={() => requestDeleteCredential(c)}
                             aria-label={`删除凭据 ${c.displayName}`}
-                            icon={<Trash2 aria-hidden="true" />}
+                            icon={<Trash2 weight="bold" aria-hidden="true" />}
                           />
                         </div>
                       </TableCell>
@@ -274,6 +268,50 @@ export function AdminCredentialTable({
               )}
         </TableBody>
       </DataTable>
+      <AdminRecordDetailDialog open={currentDetailCredential !== null || deleteTarget !== null} onClose={() => { setDetailCredential(null); setDeleteTarget(null) }} title="凭据详情"
+        listFocusRef={recordListRef}
+        confirmation={deleteTarget ? {
+          objectName: `${deleteTarget.displayName}（${deleteTarget.id}）`,
+          impact: (linkedModels[deleteTarget.id]?.length ?? 0) > 0
+            ? `当前关联模型：${linkedModels[deleteTarget.id].join('、')}。删除可能影响这些模型的调用；引用限制由服务端校验。密钥删除后无法恢复。`
+            : '当前列表未发现关联模型；引用限制仍由服务端校验。密钥删除后无法恢复。',
+          pending: actions.isPending(deleteTarget.id),
+          error: actions.errors[deleteTarget.id],
+          cancelLabel: currentDetailCredential ? '返回详情' : '取消',
+          onCancel: () => setDeleteTarget(null),
+          onConfirm: () => {
+            if (!deleteTarget || actions.isPending(deleteTarget.id)) return
+            const target = deleteTarget
+            void actions.run(target.id, target.displayName, () => deleteMutation.mutateAsync(target.id), '凭据已删除', 'delete')
+              .then(() => {
+                setDeleteTarget((current) => current?.id === target.id ? null : current)
+                setDetailCredential((current) => current?.id === target.id ? null : current)
+              }).catch(() => {})
+          },
+        } : undefined}
+        actions={currentDetailCredential && <>
+          <Switch checked={currentDetailCredential.enabled} disabled={actions.isToggleBlocked(currentDetailCredential.id, currentDetailCredential.lastTestStatus === 'pending')}
+            onCheckedChange={(enabled) => toggleCredential(currentDetailCredential, enabled)} aria-label={`凭据 ${currentDetailCredential.displayName} 启用状态`} />
+          <span>启用凭据</span>
+          <Button variant="secondary" loading={currentDetailCredential.lastTestStatus === 'pending'} disabled={credentialBusy(currentDetailCredential)}
+            onClick={() => { void handleTest(currentDetailCredential).catch(() => {}) }}>连通测试</Button>
+        </>}
+        danger={currentDetailCredential && <Button variant="danger-ghost" disabled={credentialBusy(currentDetailCredential)} onClick={() => requestDeleteCredential(currentDetailCredential)}>删除凭据</Button>}>
+        {currentDetailCredential && <>
+          <AdminRecordFields fields={[
+            { label: '凭据名称', value: currentDetailCredential.displayName },
+            { label: '来源插件', value: credentialPluginKey(currentDetailCredential) || '自定义凭据' },
+            { label: '供应商账号', value: currentDetailCredential.providerId || currentDetailCredential.adapter || '—' },
+            { label: 'Base URL', value: <span className="font-mono">{currentDetailCredential.baseUrl || '—'}</span> },
+            { label: '关联模型', value: linkedModels[currentDetailCredential.id]?.join('、') || '未关联模型' },
+            { label: '密钥状态', value: currentDetailCredential.hasApiKey || currentDetailCredential.hasCredential ? '已配置密钥' : '未设置密钥' },
+            { label: '状态', value: currentDetailCredential.enabled ? '已启用' : '已停用' },
+            { label: '最近测试', value: TEST_STATUS_LABEL[currentDetailCredential.lastTestStatus] || currentDetailCredential.lastTestStatus },
+            { label: '最近测试错误代码', value: currentDetailCredential.lastTestErrorCode || '—' },
+          ]} />
+          <AdminActionErrors errors={actions.errors[currentDetailCredential.id] ? { [currentDetailCredential.id]: actions.errors[currentDetailCredential.id] } : {}} />
+        </>}
+      </AdminRecordDetailDialog>
     </div>
   )
 }

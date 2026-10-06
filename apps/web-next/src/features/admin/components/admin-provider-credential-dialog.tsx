@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@musecanvas/contracts'
 import { api } from '@/shared/services/api'
@@ -104,6 +104,20 @@ export function AdminProviderCredentialDialog({
     setFieldErrors({})
   }
 
+  // Clear both secret formats on every identity change, including locked templates.
+  // Conservatively clearing compatible templates too avoids accidental account reuse.
+  useEffect(() => {
+    setApiKey('')
+    setServiceAccountRaw('')
+    setFieldErrors({})
+    setActionError('')
+  }, [open, scope, effectiveMode, template?.key, template?.providerId, template?.credential.format, template?.credential.schemaId, template?.credential.schemaVersion, customProvider])
+
+  function close() {
+    resetFields()
+    onClose()
+  }
+
   const createMutation = useMutation({
     mutationFn: async () => {
       setFieldErrors({})
@@ -133,8 +147,7 @@ export function AdminProviderCredentialDialog({
       return res.data
     },
     onSuccess: () => {
-      resetFields()
-      onClose()
+      close()
       queryClient.invalidateQueries({ queryKey: ['admin', 'provider-credentials'] })
     },
     onError: (err: Error) => {
@@ -157,7 +170,7 @@ export function AdminProviderCredentialDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={close}
       title={
         effectiveMode === 'template'
           ? '从媒体插件创建凭据'
@@ -165,15 +178,15 @@ export function AdminProviderCredentialDialog({
             ? '创建语言模型凭据'
             : '创建自定义凭据'
       }
-      panelClassName="max-w-form"
+      panelClassName="max-w-form max-h-[90dvh] max-md:[&_button]:min-h-[var(--control-lg)] max-md:[&_button]:min-w-[var(--control-lg)]"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={close}>
             取消
           </Button>
           <Button
             loading={createMutation.isPending}
-            disabled={effectiveMode === 'template' && !template}
+            disabled={createMutation.isPending || (effectiveMode === 'template' && !template)}
             onClick={() => createMutation.mutate()}
           >
             保存凭据
@@ -181,7 +194,7 @@ export function AdminProviderCredentialDialog({
         </>
       }
     >
-      <div className="flex flex-col gap-6">
+      <fieldset disabled={createMutation.isPending} className="flex min-w-0 flex-col gap-6">
         {actionError && (
           <Alert tone="danger" role="alert" title="无法创建凭据">
             {actionError}。请核对填写内容与供应商配置后重试；密钥无效时请重新获取 API Key。
@@ -402,7 +415,7 @@ export function AdminProviderCredentialDialog({
             </FormField>
           )}
         </FieldGroup>
-      </div>
+      </fieldset>
     </Dialog>
   )
 }

@@ -6,6 +6,9 @@ const apiOrigin = process.env.API_ORIGIN ?? 'http://localhost:3001'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    optimizePackageImports: ['@phosphor-icons/react', '@phosphor-icons/react/ssr'],
+  },
   output: process.env.STANDALONE === 'true' ? 'standalone' : undefined,
   outputFileTracingRoot: path.resolve(__dirname, '../../'),
   webpack: (config) => {

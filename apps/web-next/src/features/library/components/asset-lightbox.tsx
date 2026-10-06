@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Crop, ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
+import { CropIcon as Crop, CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight, DownloadSimpleIcon as Download, XIcon as X } from '@phosphor-icons/react'
 import { MediaFrame } from '@/shared/components/media-frame'
 import { useDialog } from '@/shared/hooks/useDialog'
 import type { DialogDirection } from '@/shared/hooks/useDialog'
@@ -129,7 +129,7 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
         onClick={onClose}
         aria-label="关闭预览"
         className="absolute right-4 top-4 rounded-pill bg-overlay/60 text-foreground-inverse enabled:hover:bg-overlay"
-        icon={<X aria-hidden="true" />}
+        icon={<X weight="bold" aria-hidden="true" />}
       />
 
       <NavButton direction="previous" disabled={isFirst} onNavigate={onNavigate} />
@@ -169,7 +169,7 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Crop aria-hidden="true" />}
+                icon={<Crop weight="bold" aria-hidden="true" />}
                 onClick={() => startRegionEdit(shown)}
                 disabled={Boolean(regionEditBlocked)}
                 title={regionEditBlocked ?? '到创作台框选要修改的区域'}
@@ -184,7 +184,7 @@ export function AssetLightbox({ assets, activeAssetId, onClose, onSelect }: Asse
                 aria-label="下载该作品"
                 className={buttonVariants({ variant: 'ghost', size: 'sm' })}
               >
-                <Download aria-hidden="true" />
+                <Download weight="bold" aria-hidden="true" />
                 下载
               </a>
             </div>
@@ -218,7 +218,7 @@ function NavButton({ direction, disabled, onNavigate }: NavButtonProps) {
       className={`absolute top-1/2 -translate-y-1/2 rounded-pill bg-overlay/60 text-foreground-inverse enabled:hover:bg-overlay ${
         previous ? 'left-4' : 'right-4'
       }`}
-      icon={<Icon aria-hidden="true" />}
+      icon={<Icon weight="bold" aria-hidden="true" />}
     />
   )
 }

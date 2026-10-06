@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useSyncExternalStore } from 'react'
-import { Moon, Sun } from 'lucide-react'
+import { MoonIcon as Moon, SunIcon as Sun } from '@phosphor-icons/react'
 import { cn } from '@/shared/lib/cn'
 import { controlSquare, iconSize } from './size'
 
@@ -66,8 +66,8 @@ export function ThemeToggle({ className }: { className?: string }) {
         className,
       )}
     >
-      <Sun aria-hidden="true" className={`block ${iconSize.md} dark:hidden`} />
-      <Moon aria-hidden="true" className={`hidden ${iconSize.md} dark:block`} />
+      <Sun weight="bold" aria-hidden="true" className={`block ${iconSize.md} dark:hidden`} />
+      <Moon weight="bold" aria-hidden="true" className={`hidden ${iconSize.md} dark:block`} />
     </button>
   )
 }
